@@ -329,10 +329,9 @@ def parse_pd0_bytearray(pd0_bytes):
         if header_id in output_data_parsers:
             key = output_data_parsers[header_id][0]
             parser = output_data_parsers[header_id][1]
-            if parser is not None:
-                data[key] = (
-                    parser(pd0_bytes, offset, data)
-                )
+            data[key] = (
+                parser(pd0_bytes, offset, data)
+            )
         else:
             print 'No parser found for header %d' % (header_id,)
 
