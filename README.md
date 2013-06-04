@@ -7,6 +7,10 @@ Reads data from TRDI ADCP work horse data loggers.
 
 Contains methods to convert from PD15 to PD0.  Once in PD0, the data can be parsed into a Python dictionary.
 
+## Installation ##
+
+    sudo python setup.py install
+
 ## Example ##
 
     from trdi_adcp_readers.pd15.pd0_converters import PD15_file_to_PD0
