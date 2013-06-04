@@ -1,38 +1,6 @@
 import struct
 
 
-def parse_pd0_bytearray(pd0_bytes):
-    data = {}
-
-    # Read in header
-    data['header'] = parse_fixed_header(pd0_bytes)
-
-    data['header']['address_offsets'] = (
-        parse_address_offsets(pd0_bytes,
-                              data['header']['number_of_data_types'])
-    )
-
-    data['fixed_leader'] = (
-        parse_fixed_leader(pd0_bytes, data['header']['address_offsets'][0])
-    )
-
-    data['variable_leader'] = (
-        parse_variable_leader(pd0_bytes, data['header']['address_offsets'][1])
-    )
-
-#    data['velocity'] = (
-#        parse_velocity(pd0_bytes, data['fixed_leader']['number_of_cells'],
-#                       data['header']['address_offsets'][2])
-#    )
-#
-#    data['correlation'] = (
-#        parse_correlation(pd0_bytes, data['fixed_leader']['number_of_cells'],
-#                          data['header']['address_offsets'][3])
-#    )
-
-    return data
-
-
 def unpack_bytes(pd0_bytes, data_format_tuples, offset=0):
     data = {}
     for fmt in data_format_tuples:
@@ -72,7 +40,7 @@ def parse_address_offsets(pd0_bytes, num_datatypes, offset=6):
     return address_data
 
 
-def parse_fixed_leader(pd0_bytes, offset):
+def parse_fixed_leader(pd0_bytes, offset, number_of_cells):
     fixed_leader_format = (
         ('id', '<H', 0, 2),
         ('cpu_firmware_version', 'B', 2, 3),
@@ -116,7 +84,7 @@ def parse_fixed_leader(pd0_bytes, offset):
     return unpack_bytes(pd0_bytes, fixed_leader_format, offset)
 
 
-def parse_variable_leader(pd0_bytes, offset):
+def parse_variable_leader(pd0_bytes, offset, number_of_cells=None):
     variable_leader_format = (
         ('id', '<H', 0, 2),
         ('ensemble_number', '<H', 2, 4),
@@ -168,7 +136,7 @@ def parse_variable_leader(pd0_bytes, offset):
     return unpack_bytes(pd0_bytes, variable_leader_format, offset)
 
 
-def parse_velocity(pd0_bytes, number_of_cells, offset):
+def parse_velocity(pd0_bytes, offset, number_of_cells):
     velocity_format = (
         ('id', '<H', 0, 2),
     )
@@ -186,7 +154,7 @@ def parse_velocity(pd0_bytes, number_of_cells, offset):
     return velocity_data
 
 
-def parse_correlation(pd0_bytes, number_of_cells, offset):
+def parse_correlation(pd0_bytes, offset, number_of_cells):
     correlation_format = (
         ('id', '<H', 0, 2),
     )
@@ -207,3 +175,44 @@ def parse_correlation(pd0_bytes, number_of_cells, offset):
         correlation_data['data'].append(cell_correlation)
 
     return correlation_data
+
+
+output_data_parsers = {
+    0x0000: ('fixed_leader', parse_fixed_leader),
+    0x0080: ('variable_leader', parse_variable_leader),
+    0x0100: ('velocity', parse_velocity),
+    0x0200: ('correlation', parse_correlation),
+    0x0300: ('echo_intensity', None),
+    0x0400: ('percent_good', None),
+    0x0500: ('status', None)
+}
+
+
+def parse_pd0_bytearray(pd0_bytes):
+    data = {}
+
+    # Read in header
+    data['header'] = parse_fixed_header(pd0_bytes)
+
+    data['header']['address_offsets'] = (
+        parse_address_offsets(pd0_bytes,
+                              data['header']['number_of_data_types'])
+    )
+
+    # Must initialize this to avoid error in parsing loop
+    data['fixed_leader'] = {}
+    data['fixed_leader']['number_of_cells'] = 0
+
+    for offset in data['header']['address_offsets']:
+        header_id = struct.unpack('<H', buffer(pd0_bytes[offset:offset+2]))[0]
+
+        print 'Header ID: %d' % (header_id,)
+        if header_id in output_data_parsers:
+            key = output_data_parsers[header_id][0]
+            parser = output_data_parsers[header_id][1]
+            data[key] = (
+                parser(pd0_bytes, offset,
+                       data['fixed_leader']['number_of_cells'])
+            )
+
+    return data
