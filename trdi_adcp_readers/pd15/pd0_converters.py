@@ -13,16 +13,15 @@ def PD15_file_to_PD0(path, header_lines=0):
     """
     Parses a PD15 formatted file and returns a list of PD0 Strings
     """
-    retVal = []
     with open(path, 'rb') as f:
         if (header_lines > 0):
             for i in xrange(0, header_lines):
                 f.readline()
 
-        for line in f:
-            retVal.append(PD15_string_to_PD0(line))
+        data_line = f.readline()
+        return PD15_string_to_PD0(data_line)
 
-    return retVal
+    return None
 
 
 def PD15_string_to_PD0(line):

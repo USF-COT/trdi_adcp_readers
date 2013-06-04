@@ -5,24 +5,27 @@ def unpack_bytes(pd0_bytes, data_format_tuples, offset=0):
     data = {}
     for fmt in data_format_tuples:
         try:
-            data_bytes = buffer(pd0_bytes[offset+fmt[2]:offset+fmt[3]])
+            struct_offset = offset+fmt[2]
+            size = struct.calcsize(fmt[1])
+            data_bytes = buffer(pd0_bytes, struct_offset, size)
             data[fmt[0]] = (
                 struct.unpack(fmt[1], data_bytes)[0]
             )
         except:
             print('Error parsing %s with the arguments '
-                  '%s, %d:%d' % (fmt[0], fmt[1], fmt[2], fmt[3]))
+                  '%s, offset:%d size:%d' % (fmt[0], fmt[1],
+                                             struct_offset, size))
 
     return data
 
 
 def parse_fixed_header(pd0_bytes):
     header_data_format = (
-        ('id', 'B', 0, 1),
-        ('data_source', 'B', 1, 2),
-        ('number_of_bytes', '<H', 2, 4),
-        ('spare', 'B', 4, 5),
-        ('number_of_data_types', 'B', 5, 6)
+        ('id', 'B', 0),
+        ('data_source', 'B', 1),
+        ('number_of_bytes', '<H', 2),
+        ('spare', 'B', 4),
+        ('number_of_data_types', 'B', 5)
     )
 
     return unpack_bytes(pd0_bytes, header_data_format)
@@ -33,112 +36,113 @@ def parse_address_offsets(pd0_bytes, num_datatypes, offset=6):
     for bytes_start in xrange(offset, offset+(num_datatypes * 2), 2):
         data = (
             struct.unpack_from('<H',
-                               buffer(pd0_bytes[bytes_start:bytes_start+2]))[0]
+                               buffer(pd0_bytes, bytes_start, 2))[0]
         )
         address_data.append(data)
 
     return address_data
 
 
-def parse_fixed_leader(pd0_bytes, offset, number_of_cells):
+def parse_fixed_leader(pd0_bytes, offset, data):
     fixed_leader_format = (
-        ('id', '<H', 0, 2),
-        ('cpu_firmware_version', 'B', 2, 3),
-        ('cpu_firmware_revision', 'B', 3, 4),
-        ('system_configuration', 'B', 5, 6),
-        ('simulation_data_flag', 'B', 6, 7),
-        ('lag_length', 'B', 7, 8),
-        ('number_of_beams', 'B', 8, 9),
-        ('number_of_cells', 'B', 9, 10),
-        ('pings_per_ensemble', '<H', 10, 12),
-        ('depth_cell_length', '<H', 12, 14),
-        ('blank_after_transmit', '<H', 14, 16),
-        ('signal_processing_mode', 'B', 16, 17),
-        ('low_correlation_threshold', 'B', 17, 18),
-        ('number_of_code_repetitions', 'B', 18, 19),
-        ('minimum_percentage_water_profile_pings', 'B', 19, 20),
-        ('error_velocity_threshold', '<H', 20, 22),
-        ('minutes', 'B', 22, 23),
-        ('seconds', 'B', 23, 24),
-        ('hundredths', 'B', 24, 25),
-        ('coordinate_transformation_process', 'B', 25, 26),
-        ('heading_alignment', '<H', 26, 28),
-        ('heading_bias', '<H', 28, 30),
-        ('sensor_source', 'B', 30, 31),
-        ('sensor_available', 'B', 31, 32),
-        ('bin_1_distance', '<H', 32, 34),
-        ('transmit_pulse_length', '<H', 34, 36),
-        ('starting_depth_cell', 'B', 36, 37),
-        ('ending_depth_cell', 'B', 37, 38),
-        ('false_target_threshold', 'B', 38, 39),
-        ('spare', 'B', 39, 40),
-        ('transmit_lag_distance', '<H', 40, 42),
-        ('cpu_board_serial_number', '<Q', 42, 50),
-        ('system_bandwidth', '<H', 50, 52),
-        ('system_power', 'B', 52, 53),
-        ('spare', 'B', 53, 54),
-        ('serial_number', '<I', 54, 58),
-        ('beam_angle', 'B', 58, 59)
+        ('id', '<H', 0),
+        ('cpu_firmware_version', 'B', 2),
+        ('cpu_firmware_revision', 'B', 3),
+        ('system_configuration', 'B', 5),
+        ('simulation_data_flag', 'B', 6),
+        ('lag_length', 'B', 7),
+        ('number_of_beams', 'B', 8),
+        ('number_of_cells', 'B', 9),
+        ('pings_per_ensemble', '<H', 10),
+        ('depth_cell_length', '<H', 12),
+        ('blank_after_transmit', '<H', 14),
+        ('signal_processing_mode', 'B', 16),
+        ('low_correlation_threshold', 'B', 17),
+        ('number_of_code_repetitions', 'B', 18),
+        ('minimum_percentage_water_profile_pings', 'B', 19),
+        ('error_velocity_threshold', '<H', 20),
+        ('minutes', 'B', 22),
+        ('seconds', 'B', 23),
+        ('hundredths', 'B', 24),
+        ('coordinate_transformation_process', 'B', 25),
+        ('heading_alignment', '<H', 26),
+        ('heading_bias', '<H', 28),
+        ('sensor_source', 'B', 30),
+        ('sensor_available', 'B', 31),
+        ('bin_1_distance', '<H', 32),
+        ('transmit_pulse_length', '<H', 34),
+        ('starting_depth_cell', 'B', 36),
+        ('ending_depth_cell', 'B', 37),
+        ('false_target_threshold', 'B', 38),
+        ('spare', 'B', 39),
+        ('transmit_lag_distance', '<H', 40),
+        ('cpu_board_serial_number', '<Q', 42),
+        ('system_bandwidth', '<H', 50),
+        ('system_power', 'B', 52),
+        ('spare', 'B', 53),
+        ('serial_number', '<I', 54),
+        ('beam_angle', 'B', 58)
     )
 
     return unpack_bytes(pd0_bytes, fixed_leader_format, offset)
 
 
-def parse_variable_leader(pd0_bytes, offset, number_of_cells=None):
+def parse_variable_leader(pd0_bytes, offset, data):
     variable_leader_format = (
-        ('id', '<H', 0, 2),
-        ('ensemble_number', '<H', 2, 4),
-        ('rtc_year', 'B', 4, 5),
-        ('rtc_month', 'B', 5, 6),
-        ('rtc_day', 'B', 6, 7),
-        ('rtc_hour', 'B', 7, 8),
-        ('rtc_minute', 'B', 8, 9),
-        ('rtc_second', 'B', 9, 10),
-        ('rtc_hundredths', 'B', 10, 11),
-        ('ensemble_roll_over', 'B', 11, 12),
-        ('bit_result', '<H', 12, 14),
-        ('speed_of_sound', '<H', 14, 16),
-        ('depth_of_transducer', '<H', 16, 18),
-        ('heading', '<H', 18, 20),
-        ('pitch', '<h', 20, 22),
-        ('roll', '<h', 22, 24),
-        ('salinity', '<H', 24, 26),
-        ('temperature', '<h', 26, 28),
-        ('mpt_minutes', 'B', 28, 29),
-        ('mpt_seconds', 'B', 29, 30),
-        ('mpt_hundredths', 'B', 30, 31),
-        ('heading_standard_deviation', 'B', 31, 32),
-        ('pitch_standard_deviation', 'B', 32, 33),
-        ('roll_standard_deviation', 'B', 33, 34),
-        ('transmit_current', 'B', 34, 35),
-        ('transmit_voltage', 'B', 35, 36),
-        ('ambient_temperature', 'B', 36, 37),
-        ('pressure_positive', 'B', 37, 38),
-        ('pressure_negative', 'B', 38, 39),
-        ('attitude_temperature', 'B', 39, 40),
-        ('attitude', 'B', 40, 41),
-        ('contamination_sensor', 'B', 41, 42),
-        ('error_status_word', '<I', 42, 46),
-        ('reserved', '<H', 46, 48),
-        ('pressure', '<I', 48, 52),
-        ('pressure_variance', '<I', 52, 56),
-        ('spare', 'B', 56, 57),
-        ('rtc_y2k_century', 'B', 57, 58),
-        ('rtc_y2k_year', 'B', 58, 59),
-        ('rtc_y2k_month', 'B', 59, 60),
-        ('rtc_y2k_day', 'B', 60, 61),
-        ('rtc_y2k_hour', 'B', 61, 62),
-        ('rtc_y2k_minute', 'B', 62, 63),
-        ('rtc_y2k_seconds', 'B', 63, 64),
-        ('rtc_y2k_hundredths', 'B', 64, 65)
+        ('id', '<H', 0),
+        ('ensemble_number', '<H', 2),
+        ('rtc_year', 'B', 4),
+        ('rtc_month', 'B', 5),
+        ('rtc_day', 'B', 6),
+        ('rtc_hour', 'B', 7),
+        ('rtc_minute', 'B', 8),
+        ('rtc_second', 'B', 9),
+        ('rtc_hundredths', 'B', 10),
+        ('ensemble_roll_over', 'B', 11),
+        ('bit_result', '<H', 12),
+        ('speed_of_sound', '<H', 14),
+        ('depth_of_transducer', '<H', 16),
+        ('heading', '<H', 18),
+        ('pitch', '<h', 20),
+        ('roll', '<h', 22),
+        ('salinity', '<H', 24),
+        ('temperature', '<h', 26),
+        ('mpt_minutes', 'B', 28),
+        ('mpt_seconds', 'B', 29),
+        ('mpt_hundredths', 'B', 30),
+        ('heading_standard_deviation', 'B', 31),
+        ('pitch_standard_deviation', 'B', 32),
+        ('roll_standard_deviation', 'B', 33),
+        ('transmit_current', 'B', 34),
+        ('transmit_voltage', 'B', 35),
+        ('ambient_temperature', 'B', 36),
+        ('pressure_positive', 'B', 37),
+        ('pressure_negative', 'B', 38),
+        ('attitude_temperature', 'B', 39),
+        ('attitude', 'B', 40),
+        ('contamination_sensor', 'B', 41),
+        ('error_status_word', '<I', 42),
+        ('reserved', '<H', 46),
+        ('pressure', '<I', 48),
+        ('pressure_variance', '<I', 52),
+        ('spare', 'B', 56),
+        ('rtc_y2k_century', 'B', 57),
+        ('rtc_y2k_year', 'B', 58),
+        ('rtc_y2k_month', 'B', 59),
+        ('rtc_y2k_day', 'B', 60),
+        ('rtc_y2k_hour', 'B', 61),
+        ('rtc_y2k_minute', 'B', 62),
+        ('rtc_y2k_seconds', 'B', 63),
+        ('rtc_y2k_hundredths', 'B', 64)
     )
 
     return unpack_bytes(pd0_bytes, variable_leader_format, offset)
 
 
-def parse_velocity(pd0_bytes, offset, number_of_cells):
+def parse_velocity(pd0_bytes, offset, data):
+    number_of_cells = data['fixed_leader']['number_of_cells']
     velocity_format = (
-        ('id', '<H', 0, 2),
+        ('id', '<H', 0),
     )
 
     velocity_data = unpack_bytes(pd0_bytes, velocity_format, offset)
@@ -154,27 +158,136 @@ def parse_velocity(pd0_bytes, offset, number_of_cells):
     return velocity_data
 
 
-def parse_correlation(pd0_bytes, offset, number_of_cells):
+def parse_per_cell_per_beam(pd0_bytes, offset,
+                            number_of_cells, number_of_beams,
+                            struct_format):
+    data_size = struct.calcsize(struct_format)
+    data = []
+    for cell in xrange(0, number_of_cells):
+        cell_start = offset + cell*number_of_beams
+        cell_data = []
+        for field in xrange(0, number_of_beams):
+            field_start = cell_start + field
+            field_data = (
+                struct.unpack(struct_format,
+                              buffer(pd0_bytes, field_start, data_size))[0]
+            )
+            cell_data.append(field_data)
+        data.append(cell_data)
+
+    return data
+
+
+def parse_correlation(pd0_bytes, offset, data):
     correlation_format = (
-        ('id', '<H', 0, 2),
+        ('id', '<H', 0),
     )
 
     correlation_data = unpack_bytes(pd0_bytes, correlation_format, offset)
     offset += 2
-    correlation_data['data'] = []
-    for cell in xrange(0, number_of_cells):
-        cell_start = offset + cell*4
-        cell_correlation = []
-        for field in xrange(0, 4):
-            field_start = cell_start + field
-            field_velocity = (
-                struct.unpack('B',
-                              buffer(pd0_bytes[field_start:field_start+1]))[0]
-            )
-            cell_correlation.append(field_velocity)
-        correlation_data['data'].append(cell_correlation)
+    correlation_data['data'] = parse_per_cell_per_beam(
+        pd0_bytes,
+        offset,
+        data['fixed_leader']['number_of_cells'],
+        data['fixed_leader']['number_of_beams'],
+        'B'
+    )
 
     return correlation_data
+
+
+def parse_echo_intensity(pd0_bytes, offset, data):
+    echo_intensity_format = (
+        ('id', '<H', 0),
+    )
+
+    echo_intensity_data = unpack_bytes(pd0_bytes,
+                                       echo_intensity_format, offset)
+    offset += 2
+    echo_intensity_data['data'] = parse_per_cell_per_beam(
+        pd0_bytes,
+        offset,
+        data['fixed_leader']['number_of_cells'],
+        data['fixed_leader']['number_of_beams'],
+        'B'
+    )
+
+    return echo_intensity_data
+
+
+def parse_percent_good(pd0_bytes, offset, data):
+    percent_good_format = (
+        ('id', '<H', 0),
+    )
+
+    percent_good_data = unpack_bytes(pd0_bytes, percent_good_format, offset)
+    offset += 2
+    percent_good_data['data'] = parse_per_cell_per_beam(
+        pd0_bytes,
+        offset,
+        data['fixed_leader']['number_of_cells'],
+        data['fixed_leader']['number_of_beams'],
+        'B'
+    )
+
+    return percent_good_data
+
+
+def parse_status(pd0_bytes, offset, data):
+    status_format = (
+        ('id', '<H', 0)
+    )
+
+    status_data = unpack_bytes(pd0_bytes, status_format, offset)
+    offset += 2
+    status_data['data'] = parse_per_cell_per_beam(
+        pd0_bytes,
+        offset,
+        data['fixed_leader']['number_of_cells'],
+        data['fixed_leader']['number_of_beams'],
+        'B'
+    )
+
+    return status_data
+
+
+def parse_bottom_track(pd0_bytes, offset, data):
+    bottom_track_format = (
+        ('id', '<H', 0),
+        ('pings_per_ensemble', '<H', 2),
+        ('delay_before_reaquire', '<H', 4),
+        ('correlation_magnitude_minimum', 'B', 6),
+        ('evaluation_amplitude_minimum', 'B', 7),
+        ('percent_good_minimum', 'B', 8),
+        ('bottom_track_mode', 'B', 9),
+        ('error_velocity_maximum', '<H', 10)
+    )
+
+    bottom_track_data, data_size = unpack_bytes(pd0_bytes,
+                                                bottom_track_format, offset)
+    offset += data_size
+    # Plan to implement as needed
+    raise NotImplementedError()
+
+
+def ChecksumError(Exception):
+    """
+    Raised when an invalid checksum is found
+    """
+    def __init__(self, calc_checksum, given_checksum):
+        self.calc_checksum = calc_checksum
+        self.given_checksum = given_checksum
+
+    def __str__(self):
+        return 'Calculated %d, Given: %d'
+
+
+def validate_checksum(pd0_bytes, offset):
+    calc_checksum = sum(pd0_bytes[:offset]) & 0xFFFF
+    given_checksum = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
+
+    if calc_checksum != given_checksum:
+        raise ChecksumError(calc_checksum, given_checksum)
 
 
 output_data_parsers = {
@@ -182,37 +295,45 @@ output_data_parsers = {
     0x0080: ('variable_leader', parse_variable_leader),
     0x0100: ('velocity', parse_velocity),
     0x0200: ('correlation', parse_correlation),
-    0x0300: ('echo_intensity', None),
-    0x0400: ('percent_good', None),
-    0x0500: ('status', None)
+    0x0300: ('echo_intensity', parse_echo_intensity),
+    0x0400: ('percent_good', parse_percent_good),
+    0x0500: ('status', parse_status),
+    0x0600: ('bottom_track', parse_bottom_track)
 }
 
 
 def parse_pd0_bytearray(pd0_bytes):
+    """
+    This is the main parsing loop. It uses output_data_parsers
+    to determine what funcitons to run given a specified offset and header
+    ID at that offset.
+
+    Returns a dictionary of values parsed out into Python types.
+    """
+
     data = {}
 
     # Read in header
     data['header'] = parse_fixed_header(pd0_bytes)
+
+    # Run checksum
+    validate_checksum(pd0_bytes, data['header']['number_of_bytes'])
 
     data['header']['address_offsets'] = (
         parse_address_offsets(pd0_bytes,
                               data['header']['number_of_data_types'])
     )
 
-    # Must initialize this to avoid error in parsing loop
-    data['fixed_leader'] = {}
-    data['fixed_leader']['number_of_cells'] = 0
-
     for offset in data['header']['address_offsets']:
-        header_id = struct.unpack('<H', buffer(pd0_bytes[offset:offset+2]))[0]
-
-        print 'Header ID: %d' % (header_id,)
+        header_id = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
         if header_id in output_data_parsers:
             key = output_data_parsers[header_id][0]
             parser = output_data_parsers[header_id][1]
-            data[key] = (
-                parser(pd0_bytes, offset,
-                       data['fixed_leader']['number_of_cells'])
-            )
+            if parser is not None:
+                data[key] = (
+                    parser(pd0_bytes, offset, data)
+                )
+        else:
+            print 'No parser found for header %d' % (header_id,)
 
     return data
