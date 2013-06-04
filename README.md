@@ -7,7 +7,7 @@ Reads data from TRDI ADCP work horse data loggers.
 
 Contains methods to convert from PD15 to PD0.  Once in PD0, the data can be parsed into a Python dictionary.
 
-[Sample Output][https://github.com/USF-COT/trdi_adcp_readers/blob/master/sample_output.txt]
+[Sample Output](https://github.com/USF-COT/trdi_adcp_readers/blob/master/sample_output.txt)
 
 ## Installation ##
 
