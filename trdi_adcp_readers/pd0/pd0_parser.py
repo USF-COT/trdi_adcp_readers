@@ -139,25 +139,6 @@ def parse_variable_leader(pd0_bytes, offset, data):
     return unpack_bytes(pd0_bytes, variable_leader_format, offset)
 
 
-def parse_velocity(pd0_bytes, offset, data):
-    number_of_cells = data['fixed_leader']['number_of_cells']
-    velocity_format = (
-        ('id', '<H', 0),
-    )
-
-    velocity_data = unpack_bytes(pd0_bytes, velocity_format, offset)
-    offset += 2  # Move past id field
-    velocity_data['data'] = []
-    for cell in xrange(0, number_of_cells):
-        cell_start = offset + cell*2
-        cell_velocity = (
-            struct.unpack('<h', buffer(pd0_bytes[cell_start:cell_start+2]))[0]
-        )
-        velocity_data['data'].append(cell_velocity)
-
-    return velocity_data
-
-
 def parse_per_cell_per_beam(pd0_bytes, offset,
                             number_of_cells, number_of_beams,
                             struct_format):
@@ -176,6 +157,24 @@ def parse_per_cell_per_beam(pd0_bytes, offset,
         data.append(cell_data)
 
     return data
+
+
+def parse_velocity(pd0_bytes, offset, data):
+    velocity_format = (
+        ('id', '<H', 0),
+    )
+
+    velocity_data = unpack_bytes(pd0_bytes, velocity_format, offset)
+    offset += 2  # Move past id field
+    velocity_data['data'] = parse_per_cell_per_beam(
+        pd0_bytes,
+        offset,
+        data['fixed_leader']['number_of_cells'],
+        data['fixed_leader']['number_of_beams'],
+        '<h'
+    )
+
+    return velocity_data
 
 
 def parse_correlation(pd0_bytes, offset, data):
