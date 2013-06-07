@@ -142,10 +142,18 @@ def parse_variable_leader(pd0_bytes, offset, data):
 def parse_per_cell_per_beam(pd0_bytes, offset,
                             number_of_cells, number_of_beams,
                             struct_format):
+    """
+    Parses fields that are stored in serial cells and beams
+    structures.
+
+    Returns an array of cell readings where each reading is an
+    array containing the value at that beam.
+    """
+
     data_size = struct.calcsize(struct_format)
     data = []
     for cell in xrange(0, number_of_cells):
-        cell_start = offset + cell*number_of_beams
+        cell_start = offset + cell*number_of_beams*data_size
         cell_data = []
         for field in xrange(0, number_of_beams):
             field_start = cell_start + field
