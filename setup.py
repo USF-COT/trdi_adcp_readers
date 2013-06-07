@@ -14,6 +14,6 @@ setup(
     maintainer='Michael Lindemuth',
     maintainer_email='mlindemu@usf.edu',
     url='https://github.com/USF-COT/trdi_adcp_readers',
-    license='Apache',
+    license='MIT',
     long_description=open("README.md").read()
 )
