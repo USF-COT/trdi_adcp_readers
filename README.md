@@ -14,6 +14,12 @@ Contains methods to convert from PD15 to PD0.  Once in PD0, the data can be pars
     git clone git://github.com/USF-COT/trdi_adcp_readers.git
     sudo python setup.py install
 
+## Test ##
+
+From the root directory run tests.py to test against a known PD0 and PD15 file
+
+    python tests.py
+
 ## Example ##
 
 ### Parse PD0 Data File ###
