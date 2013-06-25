@@ -20,6 +20,7 @@ class TestPD0File(unittest.TestCase):
         known_values = {
             'id': 0x7f,
             'data_source': 127,
+            'number_of_bytes': 1152,
             'number_of_data_types': 6,
             'spare': 0
         }
@@ -34,6 +35,18 @@ class TestPD0File(unittest.TestCase):
         }
         for k, v in known_values.items():
             self.assertEqual(self.parsed_pd0[k]['id'], v)
+
+    def test_fixed_data(self):
+        known_values = {
+            'bin_1_distance': 273,  # Centimeters
+            'depth_cell_length': 100,  # Centimeters
+            'pings_per_ensemble': 360,
+            'minutes': 0,
+            'seconds': 1,
+            'hundredths': 0
+        }
+        for k, v in known_values.items():
+            self.assertEqual(self.parsed_pd0['fixed_leader'][k], v)
 
     def test_variable_data(self):
         known_values = {
@@ -95,6 +108,17 @@ class TestPD0File(unittest.TestCase):
 
         self.run_known_array_test(known_values,
                                   self.parsed_pd0['velocity']['data'])
+
+    def test_percent_good(self):
+        known_values = [
+            [33, 19, 37, 34, 30, 27, 25, 30, 29, 25, 23, 10, 9, 13, 16, 18, 15, 10, 11, 12, 13, 13, 14, 18, 16, 19, 21, 15, 10, 13, 8, 10, 18, 20, 20, 29, 32, 35, 33, 38, 38, 43, 29, 6, 3, 9, 16, 24, 13, 9],  # NOQA
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # NOQA
+            [48, 75, 38, 24, 34, 40, 30, 39, 20, 11, 4, 2, 0, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 2, 2, 4, 1, 0, 0, 1, 0, 0, 1, 1, 2, 4, 5, 5, 8, 12, 17, 20, 56, 93, 96, 88, 71, 66, 79, 90],  # NOQA
+            [18, 5, 23, 40, 35, 32, 44, 29, 50, 62, 71, 86, 90, 84, 81, 80, 83, 89, 87, 86, 85, 86, 85, 79, 80, 76, 76, 83, 89, 85, 90, 89, 80, 77, 76, 65, 62, 59, 57, 48, 44, 35, 13, 0, 0, 2, 12, 8, 6, 0]  # NOQA
+        ]
+
+        self.run_known_array_test(known_values,
+                                  self.parsed_pd0['percent_good']['data'])
 
 
 class TestPD15(unittest.TestCase):
