@@ -156,7 +156,7 @@ def parse_per_cell_per_beam(pd0_bytes, offset,
         cell_start = offset + cell*number_of_beams*data_size
         cell_data = []
         for field in xrange(0, number_of_beams):
-            field_start = cell_start + field
+            field_start = cell_start + field*data_size
             field_data = (
                 struct.unpack(struct_format,
                               buffer(pd0_bytes, field_start, data_size))[0]
