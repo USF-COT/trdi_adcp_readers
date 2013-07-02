@@ -1,4 +1,5 @@
 import struct
+from datetime import datetime
 
 
 def unpack_bytes(pd0_bytes, data_format_tuples, offset=0):
@@ -136,7 +137,17 @@ def parse_variable_leader(pd0_bytes, offset, data):
         ('rtc_y2k_hundredths', 'B', 64)
     )
 
-    return unpack_bytes(pd0_bytes, variable_leader_format, offset)
+    variable_data = unpack_bytes(pd0_bytes, variable_leader_format, offset)
+    data['timestamp'] = datetime(
+        variable_data['rtc_year'] + 2000,
+        variable_data['rtc_month'],
+        variable_data['rtc_day'],
+        variable_data['rtc_hour'],
+        variable_data['rtc_minute'],
+        variable_data['rtc_second'],
+        variable_data['rtc_hundredths']
+    )
+    return variable_data
 
 
 def parse_per_cell_per_beam(pd0_bytes, offset,

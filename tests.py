@@ -1,16 +1,11 @@
 import unittest
-from trdi_adcp_readers.pd15.pd0_converters import PD15_file_to_PD0
-from trdi_adcp_readers.pd0.pd0_parser import parse_pd0_bytearray
+from trdi_adcp_readers.readers import read_PD0_file, read_PD15_file
 import pprint
 from itertools import izip
 
 
 class TestPD0File(unittest.TestCase):
-    pd0 = ''
-    with open('./C12AN_90.PD0', 'rb') as f:
-        pd0 = f.read()
-    pd0_bytes = bytearray(pd0)
-    parsed_pd0 = parse_pd0_bytearray(pd0_bytes)
+    parsed_pd0 = read_PD0_file('./C12AN_90.PD0')
 
     def test_print_data(self):
         pp = pprint.PrettyPrinter(indent=4)
@@ -122,8 +117,7 @@ class TestPD0File(unittest.TestCase):
 
 
 class TestPD15(unittest.TestCase):
-    test_pd0 = PD15_file_to_PD0('./140B97C6', header_lines=2)
-    parsed_pd0 = parse_pd0_bytearray(test_pd0)
+    parsed_pd0 = read_PD15_file('./140B97C6', header_lines=2)
 
 #    def test_print_data(self):
 #        pp = pprint.PrettyPrinter(indent=4)

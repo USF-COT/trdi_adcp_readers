@@ -4,8 +4,7 @@ setup(
     name='trdi_adcp_readers',
     version='1.0',
     py_modules=[
-        'trdi_adcp_readers.pd15',
-        'trdi_adcp_readers.pd0'
+        'trdi_adcp_readers.readers',
     ],
     description='A library capable of reading various TRDI ADCP '
                 'data formats including PD15 and PD0 into python '
