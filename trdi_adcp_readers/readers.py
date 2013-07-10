@@ -11,6 +11,12 @@ def read_PD15_file(path, header_lines=0):
     return parse_pd0_bytearray(pd0_bytes)
 
 
+def read_PD15_hex(hex_string):
+    pd15_byte_string = hex_string.decode("hex")
+    pd0_bytes = PD15_string_to_PD0(pd15_byte_string)
+    return parse_pd0_bytearray(pd0_bytes)
+
+
 def read_PD15_string(string):
     pd0_bytes = PD15_string_to_PD0(string)
     return parse_pd0_bytearray(pd0_bytes)

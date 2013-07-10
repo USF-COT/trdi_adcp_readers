@@ -1,5 +1,8 @@
 import unittest
-from trdi_adcp_readers.readers import read_PD0_file, read_PD15_file
+from trdi_adcp_readers.readers import (
+    read_PD0_file,
+    read_PD15_file
+)
 import pprint
 from itertools import izip
 
@@ -142,6 +145,32 @@ class TestPD15(unittest.TestCase):
         }
         for k, v in known_values.items():
             self.assertEqual(self.parsed_pd0[k]['id'], v)
+
+
+#class TestPD15String(unittest.TestCase):
+#    pd15_hex = "f114f014f112f909f40cf30df40df30cf50cf60bf50afb03f90af906fb04f0f2f113f013f213f40df50ef50ef30df40cf60bf50d0001f905fa09f907f904f1eb000000000000000000000000000000007373777005390703180000000000fdd3"  # NOQA
+#
+#    parsed_pd0 = read_PD15_hex(pd15_hex)
+#
+#    def test_header_fields(self):
+#        known_values = {
+#            'id': 0x7f,
+#            'number_of_bytes': 952,
+#            'data_source': 127,
+#            'number_of_data_types': 6,
+#            'spare': 0
+#        }
+#        for k, v in known_values.items():
+#            self.assertEqual(self.parsed_pd0['header'][k], v)
+#
+#    def test_ids(self):
+#        known_values = {
+#            'header': 127,
+#            'fixed_leader': 0,
+#            'variable_leader': 128
+#        }
+#        for k, v in known_values.items():
+#            self.assertEqual(self.parsed_pd0[k]['id'], v)
 
 
 if __name__ == '__main__':
