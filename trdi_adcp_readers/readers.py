@@ -6,23 +6,35 @@ from trdi_adcp_readers.pd15.pd0_converters import (
 from trdi_adcp_readers.pd0.pd0_parser import parse_pd0_bytearray
 
 
-def read_PD15_file(path, header_lines=0):
+def read_PD15_file(path, header_lines=0, return_pd0=False):
     pd0_bytes = PD15_file_to_PD0(path, header_lines)
-    return parse_pd0_bytearray(pd0_bytes)
+    data = parse_pd0_bytearray(pd0_bytes)
+    if return_pd0:
+        return data, pd0_bytes
+    else:
+        return data
 
 
-def read_PD15_hex(hex_string):
+def read_PD15_hex(hex_string, return_pd0=False):
     pd15_byte_string = hex_string.decode("hex")
     pd0_bytes = PD15_string_to_PD0(pd15_byte_string)
-    return parse_pd0_bytearray(pd0_bytes)
+    data = parse_pd0_bytearray(pd0_bytes)
+    if return_pd0:
+        return data, pd0_bytes
+    else:
+        return data
 
 
-def read_PD15_string(string):
+def read_PD15_string(string, return_pd0=False):
     pd0_bytes = PD15_string_to_PD0(string)
-    return parse_pd0_bytearray(pd0_bytes)
+    data = parse_pd0_bytearray(pd0_bytes)
+    if return_pd0:
+        return data, pd0_bytes
+    else:
+        return data
 
 
-def read_PD0_file(path, header_lines=0):
+def read_PD0_file(path, header_lines=0, return_pd0=False):
     pd0_bytes = bytearray()
     with open(path, 'rb') as f:
         for i in xrange(0, header_lines):
@@ -30,8 +42,16 @@ def read_PD0_file(path, header_lines=0):
 
         pd0_bytes = bytearray(f.read())
 
-    return parse_pd0_bytearray(pd0_bytes)
+    data = parse_pd0_bytearray(pd0_bytes)
+    if return_pd0:
+        return data, pd0_bytes
+    else:
+        return data
 
 
-def read_PD0_bytes(pd0_bytes):
-    return parse_pd0_bytearray(pd0_bytes)
+def read_PD0_bytes(pd0_bytes, return_pd0=False):
+    data = parse_pd0_bytearray(pd0_bytes)
+    if return_pd0:
+        return data, pd0_bytes
+    else:
+        return data
