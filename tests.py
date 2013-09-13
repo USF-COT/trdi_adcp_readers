@@ -10,9 +10,9 @@ from itertools import izip
 class TestPD0File(unittest.TestCase):
     parsed_pd0 = read_PD0_file('./C12AN_90.PD0')
 
-    def test_print_data(self):
-        pp = pprint.PrettyPrinter(indent=4)
-        pp.pprint(self.parsed_pd0)
+#    def test_print_data(self):
+#        pp = pprint.PrettyPrinter(indent=4)
+#        pp.pprint(self.parsed_pd0)
 
     def test_header_fields(self):
         known_values = {
@@ -120,11 +120,12 @@ class TestPD0File(unittest.TestCase):
 
 
 class TestPD15(unittest.TestCase):
-    parsed_pd0 = read_PD15_file('./140B97C6', header_lines=2)
+    parsed_pd0 = read_PD15_file('./140B97C6',
+                                header_lines=2)
 
-#    def test_print_data(self):
-#        pp = pprint.PrettyPrinter(indent=4)
-#        pp.pprint(self.parsed_pd0)
+    def test_print_data(self):
+        pp = pprint.PrettyPrinter(indent=4)
+        pp.pprint(self.parsed_pd0)
 
     def test_header_fields(self):
         known_values = {
