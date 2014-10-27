@@ -28,7 +28,7 @@ def PD15_string_to_PD0(line):
     """
     Parses a single PD15 line and returns a PD0 byte array
     """
-    line_bytes = bytearray(line)
+    line_bytes = bytearray(line, encoding="ASCII")
     line_chunks = chunks(line_bytes, 4)
 
     pd0_out = bytearray(len(line_bytes))
