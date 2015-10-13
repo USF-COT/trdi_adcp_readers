@@ -8,6 +8,7 @@ setup(
         'trdi_adcp_readers.pd0.pd0_parser',
         'trdi_adcp_readers.pd15.pd0_converters'
     ],
+    scripts=['scripts/convert_trdi.py'],
     description='A library capable of reading various TRDI ADCP '
                 'data formats including PD15 and PD0 into python '
                 'native types.',
