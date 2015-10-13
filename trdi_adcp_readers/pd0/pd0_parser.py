@@ -152,7 +152,7 @@ def parse_variable_leader(pd0_bytes, offset, data):
 
 def parse_per_cell_per_beam(pd0_bytes, offset,
                             number_of_cells, number_of_beams,
-                            struct_format):
+                            struct_format, debug=False):
     """
     Parses fields that are stored in serial cells and beams
     structures.
@@ -168,10 +168,13 @@ def parse_per_cell_per_beam(pd0_bytes, offset,
         cell_data = []
         for field in xrange(0, number_of_beams):
             field_start = cell_start + field*data_size
+            data_bytes = buffer(pd0_bytes, field_start, data_size)
             field_data = (
                 struct.unpack(struct_format,
-                              buffer(pd0_bytes, field_start, data_size))[0]
+                              data_bytes)[0]
             )
+            if debug:
+                print 'Bytes: %s, Data: %s' % (data_bytes, field_data)
             cell_data.append(field_data)
         data.append(cell_data)
 
