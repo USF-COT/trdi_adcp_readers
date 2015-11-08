@@ -23,6 +23,13 @@ def main():
     )
 
     parser.add_argument(
+        "--headers",
+        default=0,
+        help="Number of header lines to skip before looking for data",
+        type=int
+    )
+
+    parser.add_argument(
         "--format",
         default=None,
         help="Binary format (pd15 or pd0) to convert from.  " +
@@ -43,7 +50,10 @@ def main():
         args.format = args.format.lower()
 
     if args.format in ext_parser_map:
-        dataset = ext_parser_map[args.format](args.input_file)
+        dataset = ext_parser_map[args.format](
+            args.input_file,
+            header_lines=args.headers
+        )
         pp = pprint.PrettyPrinter(indent=4)
         pp.pprint(dataset)
     else:
