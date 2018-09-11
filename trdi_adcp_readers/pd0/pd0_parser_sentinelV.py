@@ -374,3 +374,36 @@ def parse_pd0_bytearray(pd0_bytes):
             print 'No parser found for header %d' % (header_id,)
 
     return data
+
+
+def get_pd0metadata(D):
+    """
+    Gets additional instrument setup information from
+    the fixed leader data.
+    """
+    # Set the maps for the relevant bytes (TRDI Sentinel V manual Table 37).
+    d_system_configuration_LSB = {'xxxxx010':'Sentinel V100 (300 kHz)',
+                                  'xxxxx011':'Sentinel V50 (500 kHz)',
+                                  'xxxxx100':'Sentinel V20 (1000 kHz)',
+                                  '0xxxxxxx':'downward-looking',
+                                  '1xxxxxxx':'upward-looking'}
+    d_system_configuration_MSB = {'0100xxxx':'4-beam Janus',
+                                  '0101xxxx':'5-beam Janus'}
+
+    d_coord_trans = {'':'',
+                     '':'',
+                     '':'',
+                     'xxxxxxx1':'bin mapping was used'}
+    metadata_maps = {
+        ('system_configuration_LSB'):d_system_configuration_LSB,
+        ('system_configuration_MSB'):d_system_configuration_MSB,
+        ('coordinate_transformation_descriptors'):d_coord_trans,
+    }
+
+    # Read metadata from fixed leader.
+    dFL = D['fixed_leader']
+    for k in dFL.iterkeys():
+        if dFL[k] in metadata_maps.keys():
+            dmap = metadata_maps[k]
+
+
