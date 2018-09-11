@@ -66,7 +66,7 @@ def parse_fixed_leader(pd0_bytes, offset, data, format='sentinelV'):
         ('cpu_firmware_version', 'B', 2),
         ('cpu_firmware_revision', 'B', 3),
         ('system_configuration_LSB', 'B', 4), # Identifies model and beam orientation (up/down).
-        ('system_configuration_MSB', 'B', 5), # 4 or 5 beam Janus.
+        ('system_configuration_MSB', 'B', 5), # Identifies 4 or 5 beam Janus.
         ('simulation_data_flag', 'B', 6),
         ('lag_length', 'B', 7),
         ('number_of_beams', 'B', 8),
@@ -341,7 +341,7 @@ output_data_parsers = {
 }
 
 
-def parse_pd0_bytearray(pd0_bytes):
+def parse_sentinelVpd0_bytearray(pd0_bytes):
     """
     This is the main parsing loop. It uses output_data_parsers
     to determine what functions to run given a specified offset and header ID at that offset.
@@ -353,6 +353,9 @@ def parse_pd0_bytearray(pd0_bytes):
 
     # Read in header
     data['header'] = parse_fixed_header(pd0_bytes)
+
+    # Read in metadata.
+    data['metadata'] = get_pd0metadata(data)
 
     # Run checksum
     validate_checksum(pd0_bytes, data['header']['number_of_bytes'])
@@ -407,3 +410,17 @@ def get_pd0metadata(D):
             dmap = metadata_maps[k]
 
 
+def _bitcmp(bit, bit_ref, wildcard='x'):
+    """
+    Compares the string representation of a binary number ignoring any bits
+    on the reference string 'bit_ref' marked with a wildcard.
+    """
+    bit = bit.replace('0b', '')
+    bit, bit_ref = list(bit), list(bit_ref)
+    bit.reverse(); bit_ref.reverse() # Start comparing from LSbit.
+    isbiteq = []
+    for n in range(len(bit)):
+        if bit_ref[n]!=wildcard:
+            isbiteq.append(bit[n]==bit_ref[n])
+
+    return all(isbiteq)
