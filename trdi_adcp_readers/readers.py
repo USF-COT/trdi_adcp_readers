@@ -36,13 +36,14 @@ def read_PD15_string(string, return_pd0=False):
 
 def read_PD0_file(path, header_lines=0, return_pd0=False, format='workhorse'):
     pd0_bytes = bytearray()
+    data = []
     with open(path, 'rb') as f:
         for i in xrange(0, header_lines):
             f.readline()
 
         pd0_bytes = bytearray(f.read())
 
-    data = read_PD0_bytes(pd0_bytes, return_pd0=return_pd0, format=format)
+    data.append(read_PD0_bytes(pd0_bytes, return_pd0=return_pd0, format=format))
 
     if return_pd0:
         return data, pd0_bytes
@@ -55,6 +56,8 @@ def read_PD0_bytes(pd0_bytes, return_pd0=False, format='workhorse'):
         data = parse_pd0_bytearray(pd0_bytes)
     elif format=='sentinelV':
         data = parse_sentinelVpd0_bytearray(pd0_bytes)
+    else:
+        raise pd0FormatError
 
     if return_pd0:
         return data, pd0_bytes
@@ -67,3 +70,9 @@ def inspect_PD0_file(path, format='sentinelV'):
     and organizes them in a table.
     """
     raise NotImplementedError()
+
+
+class pd0FormatError(Exception):
+    """Raised when the input *.pd0 format is unknown"""
+    print("Unknown *.pd0 format.")
+    pass

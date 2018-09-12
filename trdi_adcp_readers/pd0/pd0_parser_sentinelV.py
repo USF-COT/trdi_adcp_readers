@@ -40,8 +40,8 @@ def parse_address_offsets(pd0_bytes, num_datatypes, offset=6):
     """
     Parse address offsets (in bytes) for each variable.
     This information is in the header, but changes with
-    instrument configuration.
-    TRDI Sentinel V manual, p. 250.
+    deployment, instrument configuration, etc.
+    See TRDI Sentinel V manual, p. 250.
     """
     address_data = []
     for bytes_start in xrange(offset, offset+(num_datatypes * 2), 2):
@@ -54,12 +54,65 @@ def parse_address_offsets(pd0_bytes, num_datatypes, offset=6):
     return address_data
 
 
-def parse_fixed_leader(pd0_bytes, offset, data, format='sentinelV'):
+#----- Parsers for beam 5 data.
+
+def parse_fixed_leader5(pd0_bytes, offset, data):
+    """
+    Same as the function 'parse_fixed_leader()', but for the vertical beam.
+    See Sentinel V manual, p. 277-278.
+    """
+    fixed_leader5_format = (
+        ('id', '<H', 0),
+        ('number_of_cells', '<H', 2),
+        ('pings_per_ensemble', '<H', 4),
+        ('depth_cell_length', '<H', 6),
+        ('bin_1_distance', '<H', 8),
+        ('vertical_mode', '<H', 10),
+        ('transmit_pulse_length', '<H', 12),
+        ('vertical_lag_length', '<H', 14),
+        ('transmit_code_elements', '<H', 16),
+        ('ping_offset_time', '<H', 30)
+        )
+
+    return unpack_bytes(pd0_bytes, fixed_leader5_format, offset)
+
+
+def parse_velocity5(pd0_bytes, offset, data):
+    velocity_format = (
+        ('id', '<H', 0),
+    )
+
+    velocity_data = unpack_bytes(pd0_bytes, velocity_format, offset)
+    offset += 2  # Move past id field
+    velocity_data['data'] = parse_per_cell_beam5(pd0_bytes, offset,
+                            data['fixed_leader_beam5']['number_of_cells'], '<h')
+
+    return velocity_data
+
+
+def parse_correlation5():
+    raise NotImplementedError()
+
+
+def parse_amplitude5():
+    raise NotImplementedError()
+
+
+def parse_percent_good5():
+    raise NotImplementedError()
+
+def parse_eventlog(pd0_bytes, offset, data):
+    raise NotImplementedError()
+
+#----- Parsers for beams 1-4.
+
+def parse_fixed_leader(pd0_bytes, offset, data):
     """
     Parses the variables that do not change with time since
     the start of deployment. The format depends on the type
-    of *.pd0 file (Workhorse or Sentinel V). This format
-    follows Table 37 on the TRDI Sentinel V manual, p. 251-255.
+    of *.pd0 file (Workhorse or Sentinel V). This format is for
+    Sentinel V *.pd0 data and follows Table 37 on the TRDI
+    Sentinel V manual, p. 251-255.
     """
     fixed_leader_format = (
         ('id', '<H', 0),
@@ -178,13 +231,41 @@ def parse_per_cell_per_beam(pd0_bytes, offset,
     Returns an array of cell readings where each reading is an
     array containing the value at that beam.
     """
-
     data_size = struct.calcsize(struct_format)
     data = []
     for cell in xrange(0, number_of_cells):
         cell_start = offset + cell*number_of_beams*data_size
         cell_data = []
         for field in xrange(0, number_of_beams):
+            field_start = cell_start + field*data_size
+            data_bytes = buffer(pd0_bytes, field_start, data_size)
+            field_data = (
+                struct.unpack(struct_format,
+                              data_bytes)[0]
+            )
+            if debug:
+                print 'Bytes: %s, Data: %s' % (data_bytes, field_data)
+            cell_data.append(field_data)
+        data.append(cell_data)
+
+    return data
+
+
+def parse_per_cell_beam5(pd0_bytes, offset, number_of_cells, struct_format,
+                         debug=False):
+    """
+    Parses fields that are stored in serial cells and beams
+    structures.
+
+    Returns an array of cell readings where each reading is an
+    array containing the value at beam 5.
+    """
+    data_size = struct.calcsize(struct_format)
+    data = []
+    for cell in xrange(0, number_of_cells):
+        cell_start = offset + cell*data_size
+        cell_data = []
+        for field in [0]:
             field_start = cell_start + field*data_size
             data_bytes = buffer(pd0_bytes, field_start, data_size)
             field_data = (
@@ -209,8 +290,8 @@ def parse_velocity(pd0_bytes, offset, data):
     velocity_data['data'] = parse_per_cell_per_beam(
         pd0_bytes,
         offset,
-        data['fixed_leader']['number_of_cells'],
-        data['fixed_leader']['number_of_beams'],
+        data['fixed_leader_janus']['number_of_cells'],
+        data['fixed_leader_janus']['number_of_beams'],
         '<h'
     )
 
@@ -227,8 +308,8 @@ def parse_correlation(pd0_bytes, offset, data):
     correlation_data['data'] = parse_per_cell_per_beam(
         pd0_bytes,
         offset,
-        data['fixed_leader']['number_of_cells'],
-        data['fixed_leader']['number_of_beams'],
+        data['fixed_leader_janus']['number_of_cells'],
+        data['fixed_leader_janus']['number_of_beams'],
         'B'
     )
 
@@ -246,8 +327,8 @@ def parse_echo_intensity(pd0_bytes, offset, data):
     echo_intensity_data['data'] = parse_per_cell_per_beam(
         pd0_bytes,
         offset,
-        data['fixed_leader']['number_of_cells'],
-        data['fixed_leader']['number_of_beams'],
+        data['fixed_leader_janus']['number_of_cells'],
+        data['fixed_leader_janus']['number_of_beams'],
         'B'
     )
 
@@ -264,8 +345,8 @@ def parse_percent_good(pd0_bytes, offset, data):
     percent_good_data['data'] = parse_per_cell_per_beam(
         pd0_bytes,
         offset,
-        data['fixed_leader']['number_of_cells'],
-        data['fixed_leader']['number_of_beams'],
+        data['fixed_leader_janus']['number_of_cells'],
+        data['fixed_leader_janus']['number_of_beams'],
         'B'
     )
 
@@ -282,8 +363,8 @@ def parse_status(pd0_bytes, offset, data):
     status_data['data'] = parse_per_cell_per_beam(
         pd0_bytes,
         offset,
-        data['fixed_leader']['number_of_cells'],
-        data['fixed_leader']['number_of_beams'],
+        data['fixed_leader_janus']['number_of_cells'],
+        data['fixed_leader_janus']['number_of_beams'],
         'B'
     )
 
@@ -293,11 +374,11 @@ def parse_status(pd0_bytes, offset, data):
 def parse_bottom_track(pd0_bytes, offset, data):
     bottom_track_format = (
         ('id', '<H', 0),
-        ('pings_per_ensemble', '<H', 2),
-        ('delay_before_reaquire', '<H', 4),
+        ('bottomtrack_pings_per_ensemble', '<H', 2),
+        ('reserved', '<H', 4),
         ('correlation_magnitude_minimum', 'B', 6),
         ('evaluation_amplitude_minimum', 'B', 7),
-        ('percent_good_minimum', 'B', 8),
+        ('reserved', 'B', 8),
         ('bottom_track_mode', 'B', 9),
         ('error_velocity_maximum', '<H', 10)
     )
@@ -318,11 +399,11 @@ def ChecksumError(Exception):
         self.given_checksum = given_checksum
 
     def __str__(self):
-        return 'Calculated %d, Given: %d'
+        return 'Calculated %d, Given: %d'%(self.calc_checksum, self.given_checksum)
 
 
 def validate_checksum(pd0_bytes, offset):
-    calc_checksum = sum(pd0_bytes[:offset]) & 0xFFFF
+    calc_checksum = sum(pd0_bytes[:offset]) & 0xFFFF # Modulo 65535 checksum.
     given_checksum = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
 
     if calc_checksum != given_checksum:
@@ -330,15 +411,35 @@ def validate_checksum(pd0_bytes, offset):
 
 
 output_data_parsers = {
-    0x0000: ('fixed_leader', parse_fixed_leader),
-    0x0080: ('variable_leader', parse_variable_leader),
-    0x0100: ('velocity', parse_velocity),
-    0x0200: ('correlation', parse_correlation),
-    0x0300: ('echo_intensity', parse_echo_intensity),
-    0x0400: ('percent_good', parse_percent_good),
-    0x0500: ('status', parse_status),
-    0x0600: ('bottom_track', parse_bottom_track)
+    #--- Janus (beams 1-4) data.
+    0x0000: ('fixed_leader_janus', parse_fixed_leader),
+    0x0080: ('variable_leader_janus', parse_variable_leader),
+    0x0100: ('velocity_janus', parse_velocity),
+    0x0200: ('correlation_janus', parse_correlation),
+    0x0300: ('echo_intensity_janus', parse_echo_intensity),
+    0x0004: ('percent_good_janus', parse_percent_good),
+    #--- Sentinel V specific outputs.
+    # 0x7000: ('sentinelV_system_configuration', parse_sentinelV_syscfg),
+    # 0x7001: ('sentinelV_ping_setup', parse_sentinelV_pingsetup),
+    # 0x7002: ('sentinelV_ADC_data', parse_sentinelV_ADC),
+    # 0x7003: ('sentinelV_features_data', parse_sentinelV_features),
+    #--- Beam 5 data.
+    0x0f01: ('fixed_leader_beam5', parse_fixed_leader5),
+    0x0a00: ('velocity_beam5', parse_velocity5),
+    # 0x: ('correlation_beam5', parse_correlation5),
+    # 0x: ('amplitude_beam5', parse_amplitude5),
+    # 0x: ('percent_good_beam5', parse_percent_good5),
+    # misc.
+    # 0x3200: ('instrument_transformation_matrix', parse_transfmatrix), #TODO
+    0x0006: ('bottom_track', parse_bottom_track),
+    # 0x000b: ('wave_parameters', parse_waves), #TODO
+    # 0x000c: ('wave_parameters2', parse_sea_swell), #TODO
+    # 0x7004: ('event_log', parse_eventlog), #TODO
 }
+
+
+
+
 
 
 def parse_sentinelVpd0_bytearray(pd0_bytes):
@@ -348,14 +449,10 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
 
     Returns a dictionary of values parsed out into Python types.
     """
-
     data = {}
 
     # Read in header
     data['header'] = parse_fixed_header(pd0_bytes)
-
-    # Read in metadata.
-    data['metadata'] = get_pd0metadata(data)
 
     # Run checksum
     validate_checksum(pd0_bytes, data['header']['number_of_bytes'])
@@ -374,7 +471,11 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
                 parser(pd0_bytes, offset, data)
             )
         else:
-            print 'No parser found for header %d' % (header_id,)
+            print 'No parser found for header at %s' % (hex(header_id),)
+
+    # Add metadata.
+    if 'fixed_leader_janus' in data.keys():
+        data = get_pd0metadata(data)
 
     return data
 
@@ -393,21 +494,33 @@ def get_pd0metadata(D):
     d_system_configuration_MSB = {'0100xxxx':'4-beam Janus',
                                   '0101xxxx':'5-beam Janus'}
 
-    d_coord_trans = {'':'',
-                     '':'',
-                     '':'',
-                     'xxxxxxx1':'bin mapping was used'}
+    # d_coord_trans = {'':'',
+    #                  '':'',
+    #                  '':'',
+    #                  'xxxxxxx1':'bin mapping was used'}
     metadata_maps = {
         ('system_configuration_LSB'):d_system_configuration_LSB,
         ('system_configuration_MSB'):d_system_configuration_MSB,
-        ('coordinate_transformation_descriptors'):d_coord_trans,
+        # ('coordinate_transformation_descriptors'):d_coord_trans,
     }
 
     # Read metadata from fixed leader.
-    dFL = D['fixed_leader']
+    dFL = D['fixed_leader_janus']
+    allmeta = []
     for k in dFL.iterkeys():
-        if dFL[k] in metadata_maps.keys():
+        if k in metadata_maps.keys():
             dmap = metadata_maps[k]
+            # Test all fields and include the ones
+            # that match the bit sequences read.
+            bytei = bin(dFL[k])
+            for bitstr in dmap.keys():
+                if _bitcmp(bytei, bitstr):
+                    word = dmap[bitstr]
+                    dFL.update({k:word})
+                    allmeta.append(word)
+    D.update({'fixed_leader_janus':dFL, 'descriptors':allmeta})
+
+    return D
 
 
 def _bitcmp(bit, bit_ref, wildcard='x'):
