@@ -34,7 +34,7 @@ def read_PD15_string(string, return_pd0=False):
         return data
 
 
-def read_PD0_file(path, header_lines=0, return_pd0=False):
+def read_PD0_file(path, header_lines=0, return_pd0=False, format='workhorse'):
     pd0_bytes = bytearray()
     with open(path, 'rb') as f:
         for i in xrange(0, header_lines):
@@ -42,10 +42,7 @@ def read_PD0_file(path, header_lines=0, return_pd0=False):
 
         pd0_bytes = bytearray(f.read())
 
-    if format=='workhorse':
-        data = parse_pd0_bytearray(pd0_bytes)
-    elif format='sentinelV':
-        data = parse_sentinelVpd0_bytearray(pd0_bytes)
+    data = read_PD0_bytes(pd0_bytes, return_pd0=return_pd0, format=format)
 
     if return_pd0:
         return data, pd0_bytes
@@ -56,10 +53,17 @@ def read_PD0_file(path, header_lines=0, return_pd0=False):
 def read_PD0_bytes(pd0_bytes, return_pd0=False, format='workhorse'):
     if format=='workhorse':
         data = parse_pd0_bytearray(pd0_bytes)
-    elif format='sentinelV':
+    elif format=='sentinelV':
         data = parse_sentinelVpd0_bytearray(pd0_bytes)
 
     if return_pd0:
         return data, pd0_bytes
     else:
         return data
+
+def inspect_PD0_file(path, format='sentinelV'):
+    """
+    Fetches and organizes several metadata on instrument setup
+    and organizes them in a table.
+    """
+    raise NotImplementedError()
