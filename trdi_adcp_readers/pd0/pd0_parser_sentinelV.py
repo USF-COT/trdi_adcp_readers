@@ -264,18 +264,16 @@ def parse_per_cell_beam5(pd0_bytes, offset, number_of_cells, struct_format,
     data = []
     for cell in xrange(0, number_of_cells):
         cell_start = offset + cell*data_size
-        cell_data = []
-        for field in [0]:
-            field_start = cell_start + field*data_size
-            data_bytes = buffer(pd0_bytes, field_start, data_size)
-            field_data = (
-                struct.unpack(struct_format,
-                              data_bytes)[0]
-            )
-            if debug:
-                print 'Bytes: %s, Data: %s' % (data_bytes, field_data)
-            cell_data.append(field_data)
-        data.append(cell_data)
+        allcells5_data = []
+
+        data_bytes = buffer(pd0_bytes, cell_start, data_size)
+        cell_data = (struct.unpack(struct_format,
+                                   data_bytes)[0])
+        if debug:
+            print 'Bytes: %s, Data: %s' % (data_bytes, cell_data)
+        allcells5_data.append(cell_data)
+
+        data.append(allcells5_data)
 
     return data
 
@@ -392,7 +390,7 @@ def parse_bottom_track(pd0_bytes, offset, data):
 
 def ChecksumError(Exception):
     """
-    Raised when an invalid checksum is found
+    Raised when an invalid checksum is found.
     """
     def __init__(self, calc_checksum, given_checksum):
         self.calc_checksum = calc_checksum
@@ -404,9 +402,15 @@ def ChecksumError(Exception):
 
 def validate_checksum(pd0_bytes, offset):
     calc_checksum = sum(pd0_bytes[:offset]) & 0xFFFF # Modulo 65535 checksum.
-    given_checksum = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
+    try:
+        buff = buffer(pd0_bytes, offset, 2)
+    except UnboundLocalError:
+        print("Couldn't check checksum")
+        return
+    given_checksum = struct.unpack('<H', buff)[0]
 
     if calc_checksum != given_checksum:
+        print(calc_checksum, given_checksum)
         raise ChecksumError(calc_checksum, given_checksum)
 
 
@@ -463,7 +467,11 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
     )
 
     for offset in data['header']['address_offsets']:
-        header_id = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
+        try:
+            header_id = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
+        except:
+            print(buffer(pd0_bytes, offset, 2))
+            print(pd0_bytes)
         if header_id in output_data_parsers:
             key = output_data_parsers[header_id][0]
             parser = output_data_parsers[header_id][1]
@@ -471,7 +479,8 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
                 parser(pd0_bytes, offset, data)
             )
         else:
-            print 'No parser found for header at %s' % (hex(header_id),)
+            pass
+            # print 'No parser found for header at %s' % (hex(header_id),)
 
     # Add metadata.
     if 'fixed_leader_janus' in data.keys():

@@ -1,3 +1,4 @@
+import numpy as np
 from trdi_adcp_readers.pd15.pd0_converters import (
     PD15_file_to_PD0,
     PD15_string_to_PD0
@@ -34,30 +35,65 @@ def read_PD15_string(string, return_pd0=False):
         return data
 
 
-def read_PD0_file(path, header_lines=0, return_pd0=False, format='workhorse'):
+def read_PD0_file(path, header_lines=0, return_pd0=False, all_ensembles=True,
+                  format='workhorse'):
     pd0_bytes = bytearray()
-    data = []
     with open(path, 'rb') as f:
-        for i in xrange(0, header_lines):
-            f.readline()
-
         pd0_bytes = bytearray(f.read())
 
-    data.append(read_PD0_bytes(pd0_bytes, return_pd0=return_pd0, format=format))
+    if all_ensembles:
+        pd0reader = read_PD0_bytes_ensembles
+    else:
+        pd0reader = read_PD0_bytes
+
+    data = pd0reader(pd0_bytes, return_pd0=return_pd0,
+                     format=format)
+
+    # Get timestamps for all ensembles.
+    # Note that these timestamps indicate the Janus' (i.e., beams 1-4) pings,
+    # which will not necessarily be the same as the vertical beam's timestamp.
+    t = np.array([data[n]['timestamp'] for n in xrange(len(data))])
 
     if return_pd0:
-        return data, pd0_bytes
+        return data, t, pd0_bytes
     else:
-        return data
+        return data, t
+
+
+def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
+                             format='workhorse'):
+    """
+    Finds the hex positions in the bytearray that identify the header of each
+    ensemble. Then read each ensemble into a dictionary and accumulates them
+    in a list.
+    """
+    if format=='workhorse':
+        parsepd0 = parse_pd0_bytearray
+    elif format=='sentinel':
+        parsepd0 = parse_sentinelVpd0_bytearray
+    else:
+        print('Unknown *.pd0 format')
+
+    # Split segments of the byte array per ensemble.
+    DATA = []
+    ensbytes = PD0_BYTES.split(headerid)
+    ensbytes = [headerid + ens for ens in ensbytes] # Prepend header id back.
+    ensbytes = ensbytes[1:] # First entry is empty, cap it off.
+    _ = [DATA.append(parsepd0(ensb)) for ensb in ensbytes]
+
+    if return_pd0:
+        return DATA, PD0_BYTES
+    else:
+        return DATA
 
 
 def read_PD0_bytes(pd0_bytes, return_pd0=False, format='workhorse'):
     if format=='workhorse':
         data = parse_pd0_bytearray(pd0_bytes)
-    elif format=='sentinelV':
+    elif format=='sentinel':
         data = parse_sentinelVpd0_bytearray(pd0_bytes)
     else:
-        raise pd0FormatError
+        print('Unknown *.pd0 format')
 
     if return_pd0:
         return data, pd0_bytes
@@ -70,9 +106,3 @@ def inspect_PD0_file(path, format='sentinelV'):
     and organizes them in a table.
     """
     raise NotImplementedError()
-
-
-class pd0FormatError(Exception):
-    """Raised when the input *.pd0 format is unknown"""
-    print("Unknown *.pd0 format.")
-    pass
