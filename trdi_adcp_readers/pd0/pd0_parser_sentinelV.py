@@ -1,5 +1,9 @@
 import struct
 from datetime import datetime
+import sys
+from os import system
+from IPython import embed
+import numpy as np
 
 
 def unpack_bytes(pd0_bytes, data_format_tuples, offset=0):
@@ -12,10 +16,12 @@ def unpack_bytes(pd0_bytes, data_format_tuples, offset=0):
             data[fmt[0]] = (
                 struct.unpack(fmt[1], data_bytes)[0]
             )
-        except:
-            print('Error parsing %s with the arguments '
-                  '%s, offset:%d size:%d' % (fmt[0], fmt[1],
-                                             struct_offset, size))
+        except Exception, e:
+            pass
+            # print('Error parsing %s with the arguments '
+            #       '%s, offset:%d size:%d' % (fmt[0], fmt[1],
+            #                                  struct_offset, size))
+            # embed()
 
     return data
 
@@ -77,15 +83,19 @@ def parse_fixed_leader5(pd0_bytes, offset, data):
     return unpack_bytes(pd0_bytes, fixed_leader5_format, offset)
 
 
-def parse_velocity5(pd0_bytes, offset, data):
+def parse_velocity5(pd0_bytes, offset, data, fbad=-32768):
     velocity_format = (
         ('id', '<H', 0),
     )
 
     velocity_data = unpack_bytes(pd0_bytes, velocity_format, offset)
     offset += 2  # Move past id field
-    velocity_data['data'] = parse_per_cell_beam5(pd0_bytes, offset,
-                            data['fixed_leader_beam5']['number_of_cells'], '<h')
+    vel = parse_per_cell_beam5(pd0_bytes, offset,
+                               data['fixed_leader_beam5']['number_of_cells'],
+                               '<h')
+    vel = np.array(vel)
+    vel = np.ma.masked_where(vel==fbad, vel)
+    velocity_data['data'] = vel
 
     return velocity_data
 
@@ -223,7 +233,7 @@ def parse_variable_leader(pd0_bytes, offset, data):
 
 def parse_per_cell_per_beam(pd0_bytes, offset,
                             number_of_cells, number_of_beams,
-                            struct_format, debug=False):
+                            struct_format, debug=True):
     """
     Parses fields that are stored in serial cells and beams
     structures.
@@ -239,12 +249,14 @@ def parse_per_cell_per_beam(pd0_bytes, offset,
         for field in xrange(0, number_of_beams):
             field_start = cell_start + field*data_size
             data_bytes = buffer(pd0_bytes, field_start, data_size)
-            field_data = (
-                struct.unpack(struct_format,
-                              data_bytes)[0]
-            )
-            if debug:
+            try:
+                field_data = (
+                    struct.unpack(struct_format,
+                                  data_bytes)[0]
+                )
+            except:
                 print 'Bytes: %s, Data: %s' % (data_bytes, field_data)
+                raise ByteUnpackingError
             cell_data.append(field_data)
         data.append(cell_data)
 
@@ -278,20 +290,21 @@ def parse_per_cell_beam5(pd0_bytes, offset, number_of_cells, struct_format,
     return data
 
 
-def parse_velocity(pd0_bytes, offset, data):
+def parse_velocity(pd0_bytes, offset, data, fbad=-32768):
     velocity_format = (
         ('id', '<H', 0),
     )
 
     velocity_data = unpack_bytes(pd0_bytes, velocity_format, offset)
     offset += 2  # Move past id field
-    velocity_data['data'] = parse_per_cell_per_beam(
-        pd0_bytes,
-        offset,
-        data['fixed_leader_janus']['number_of_cells'],
-        data['fixed_leader_janus']['number_of_beams'],
-        '<h'
-    )
+    vel = parse_per_cell_per_beam(pd0_bytes, offset,
+                                  data['fixed_leader_janus']['number_of_cells'],
+                                  data['fixed_leader_janus']['number_of_beams'],
+                                  '<h')
+
+    vel = np.array(vel)
+    vel = np.ma.masked_where(vel==fbad, vel)
+    velocity_data['data'] = vel
 
     return velocity_data
 
@@ -303,13 +316,11 @@ def parse_correlation(pd0_bytes, offset, data):
 
     correlation_data = unpack_bytes(pd0_bytes, correlation_format, offset)
     offset += 2
-    correlation_data['data'] = parse_per_cell_per_beam(
-        pd0_bytes,
-        offset,
-        data['fixed_leader_janus']['number_of_cells'],
-        data['fixed_leader_janus']['number_of_beams'],
-        'B'
-    )
+    corr = parse_per_cell_per_beam(
+                pd0_bytes, offset,
+                data['fixed_leader_janus']['number_of_cells'],
+                data['fixed_leader_janus']['number_of_beams'], 'B')
+    correlation_data['data'] = np.array(corr)
 
     return correlation_data
 
@@ -322,13 +333,14 @@ def parse_echo_intensity(pd0_bytes, offset, data):
     echo_intensity_data = unpack_bytes(pd0_bytes,
                                        echo_intensity_format, offset)
     offset += 2
-    echo_intensity_data['data'] = parse_per_cell_per_beam(
+    echo = parse_per_cell_per_beam(
         pd0_bytes,
         offset,
         data['fixed_leader_janus']['number_of_cells'],
         data['fixed_leader_janus']['number_of_beams'],
         'B'
     )
+    echo_intensity_data['data'] = np.array(echo)
 
     return echo_intensity_data
 
@@ -340,78 +352,79 @@ def parse_percent_good(pd0_bytes, offset, data):
 
     percent_good_data = unpack_bytes(pd0_bytes, percent_good_format, offset)
     offset += 2
-    percent_good_data['data'] = parse_per_cell_per_beam(
+    pgood = parse_per_cell_per_beam(
         pd0_bytes,
         offset,
         data['fixed_leader_janus']['number_of_cells'],
         data['fixed_leader_janus']['number_of_beams'],
         'B'
     )
+    percent_good_data['data'] = np.array(pgood)
 
     return percent_good_data
 
 
-def parse_status(pd0_bytes, offset, data):
-    status_format = (
-        ('id', '<H', 0)
-    )
-
-    status_data = unpack_bytes(pd0_bytes, status_format, offset)
-    offset += 2
-    status_data['data'] = parse_per_cell_per_beam(
-        pd0_bytes,
-        offset,
-        data['fixed_leader_janus']['number_of_cells'],
-        data['fixed_leader_janus']['number_of_beams'],
-        'B'
-    )
-
-    return status_data
-
-
 def parse_bottom_track(pd0_bytes, offset, data):
-    bottom_track_format = (
-        ('id', '<H', 0),
-        ('bottomtrack_pings_per_ensemble', '<H', 2),
-        ('reserved', '<H', 4),
-        ('correlation_magnitude_minimum', 'B', 6),
-        ('evaluation_amplitude_minimum', 'B', 7),
-        ('reserved', 'B', 8),
-        ('bottom_track_mode', 'B', 9),
-        ('error_velocity_maximum', '<H', 10)
-    )
-
-    bottom_track_data, data_size = unpack_bytes(pd0_bytes,
-                                                bottom_track_format, offset)
-    offset += data_size
-    # Plan to implement as needed
     raise NotImplementedError()
+    # bottom_track_format = (
+    #     ('id', '<H', 0),
+    #     ('bottomtrack_pings_per_ensemble', '<H', 2),
+    #     ('reserved', '<H', 4),
+    #     ('correlation_magnitude_minimum', 'B', 6),
+    #     ('evaluation_amplitude_minimum', 'B', 7),
+    #     ('reserved', 'B', 8),
+    #     ('bottom_track_mode', 'B', 9),
+    #     ('error_velocity_maximum', '<H', 10)
+    # )
+    #
+    # bottom_track_data, data_size = unpack_bytes(pd0_bytes,
+    #                                             bottom_track_format, offset)
+    # offset += data_size
 
 
-def ChecksumError(Exception):
+class ChecksumError(Exception):
     """
-    Raised when an invalid checksum is found.
+    Raised when the checksum of an ensemble doesn't match the calculated one.
     """
     def __init__(self, calc_checksum, given_checksum):
         self.calc_checksum = calc_checksum
         self.given_checksum = given_checksum
 
     def __str__(self):
-        return 'Calculated %d, Given: %d'%(self.calc_checksum, self.given_checksum)
+        return 'Bad checksum: Calculated %d, Given: %d'%(self.calc_checksum, self.given_checksum)
+
+
+class ReadChecksumError(Exception):
+    """
+    Raised when the calculation of an ensemble fails, so cannot compare
+    the calculated and read checksums.
+    """
+    system("sleep 1")
+    pass
+
+
+class ReadHeaderError(Exception):
+    """
+    Raised when cannot read any one ensemble's header.
+    """
+    system("sleep 1")
+    pass
 
 
 def validate_checksum(pd0_bytes, offset):
     calc_checksum = sum(pd0_bytes[:offset]) & 0xFFFF # Modulo 65535 checksum.
+    buff = buffer(pd0_bytes, offset, 2)
     try:
-        buff = buffer(pd0_bytes, offset, 2)
-    except UnboundLocalError:
-        print("Couldn't check checksum")
-        return
-    given_checksum = struct.unpack('<H', buff)[0]
+        given_checksum = struct.unpack('<H', buff)[0]
+    except:
+        raise ReadChecksumError("Could not read checksum of ensemble.")
 
     if calc_checksum != given_checksum:
-        print(calc_checksum, given_checksum)
-        raise ChecksumError(calc_checksum, given_checksum)
+        E = ChecksumError(calc_checksum, given_checksum)
+        print(E) # First print error message,
+        raise E  # then propagate exception to caller.
+    else: # Read checksum successfully and also, it matched the calculated one.
+        pass
 
 
 output_data_parsers = {
@@ -442,10 +455,6 @@ output_data_parsers = {
 }
 
 
-
-
-
-
 def parse_sentinelVpd0_bytearray(pd0_bytes):
     """
     This is the main parsing loop. It uses output_data_parsers
@@ -458,8 +467,13 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
     # Read in header
     data['header'] = parse_fixed_header(pd0_bytes)
 
-    # Run checksum
-    validate_checksum(pd0_bytes, data['header']['number_of_bytes'])
+    # Run checksum.
+    try:
+        nbytes_in_ens = data['header']['number_of_bytes']
+    except KeyError:
+        raise ReadHeaderError("Could not read number of bytes in ensemble.")
+
+    validate_checksum(pd0_bytes, nbytes_in_ens)
 
     data['header']['address_offsets'] = (
         parse_address_offsets(pd0_bytes,
@@ -470,8 +484,8 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
         try:
             header_id = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
         except:
-            print(buffer(pd0_bytes, offset, 2))
-            print(pd0_bytes)
+            continue
+            # embed()
         if header_id in output_data_parsers:
             key = output_data_parsers[header_id][0]
             parser = output_data_parsers[header_id][1]
