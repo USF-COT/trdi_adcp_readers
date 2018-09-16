@@ -1,12 +1,12 @@
+import numpy as np
 import struct
 from datetime import datetime
 import sys
 from os import system
-from IPython import embed
-import numpy as np
+# from IPython import embed
 
 
-def unpack_bytes(pd0_bytes, data_format_tuples, offset=0):
+def unpack_bytes(pd0_bytes, data_format_tuples, offset, verbose=False):
     data = {}
     for fmt in data_format_tuples:
         try:
@@ -39,7 +39,7 @@ def parse_fixed_header(pd0_bytes):
         ('number_of_data_types', 'B', 5)
     )
 
-    return unpack_bytes(pd0_bytes, header_data_format)
+    return unpack_bytes(pd0_bytes, header_data_format, 0)
 
 
 def parse_address_offsets(pd0_bytes, num_datatypes, offset=6):
@@ -50,11 +50,13 @@ def parse_address_offsets(pd0_bytes, num_datatypes, offset=6):
     See TRDI Sentinel V manual, p. 250.
     """
     address_data = []
-    for bytes_start in xrange(offset, offset+(num_datatypes * 2), 2):
-        data = (
-            struct.unpack_from('<H',
-                               buffer(pd0_bytes, bytes_start, 2))[0]
-        )
+    for bytes_start in xrange(offset, offset+(num_datatypes*2), 2):
+        try:
+            buff = buffer(pd0_bytes, bytes_start, 2)
+            data = (struct.unpack('<H', buff)[0])
+        except:
+            # embed()
+            pass
         address_data.append(data)
 
     return address_data
@@ -256,7 +258,8 @@ def parse_per_cell_per_beam(pd0_bytes, offset,
                 )
             except:
                 print 'Bytes: %s, Data: %s' % (data_bytes, field_data)
-                raise ByteUnpackingError
+                # raise ByteUnpackingError
+                break
             cell_data.append(field_data)
         data.append(cell_data)
 
@@ -407,17 +410,34 @@ class ReadHeaderError(Exception):
     """
     Raised when cannot read any one ensemble's header.
     """
-    system("sleep 1")
     pass
 
 
 def validate_checksum(pd0_bytes, offset):
     calc_checksum = sum(pd0_bytes[:offset]) & 0xFFFF # Modulo 65535 checksum.
-    buff = buffer(pd0_bytes, offset, 2)
+                                                     # The '&' operator discards
+                                                     # overflow bits.
+    buff = buffer(pd0_bytes, offset, 2) # Count all bytes in
+                                        # ensemble excluding the
+                                        # last 2 (the checksum).
     try:
         given_checksum = struct.unpack('<H', buff)[0]
     except:
+        # buff2 = buffer(pd0_bytes, len(pd0_bytes)-2, 2)
+        # given_checksum = struct.unpack('<H', buff2)[0]
+        # embed()
         raise ReadChecksumError("Could not read checksum of ensemble.")
+        # try:
+        #     buff = buffer(pd0_bytes, offset-1, 2)
+        #     given_checksum = struct.unpack('<H', buff)[0]
+        # except:
+        #     # embed()
+        #     # print(pd0_bytes[:5])
+        #     raise ReadChecksumError("Could not read checksum of ensemble.")
+        #     # print("Warning: Could not read checksum of ensemble.")
+        #     # return
+    # else:
+    #     print(pd0_bytes[:10])
 
     if calc_checksum != given_checksum:
         E = ChecksumError(calc_checksum, given_checksum)
