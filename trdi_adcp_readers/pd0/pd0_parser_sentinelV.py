@@ -16,12 +16,14 @@ def unpack_bytes(pd0_bytes, data_format_tuples, offset, verbose=False):
             data[fmt[0]] = (
                 struct.unpack(fmt[1], data_bytes)[0]
             )
-        except Exception, e:
-            pass
-            # print('Error parsing %s with the arguments '
-            #       '%s, offset:%d size:%d' % (fmt[0], fmt[1],
-            #                                  struct_offset, size))
-            # embed()
+        except Exception:
+            if verbose:
+                print('Error parsing %s with the arguments '
+                      '%s, offset:%d size:%d' % (fmt[0], fmt[1],
+                                                 struct_offset,
+                                                 size))
+                # embed()
+                pass
 
     return data
 
@@ -66,8 +68,8 @@ def parse_address_offsets(pd0_bytes, num_datatypes, offset=6):
 
 def parse_fixed_leader5(pd0_bytes, offset, data):
     """
-    Same as the function 'parse_fixed_leader()', but for the vertical beam.
-    See Sentinel V manual, p. 277-278.
+    Same as the function 'parse_fixed_leader()', but for
+    the vertical beam. See Sentinel V manual, p. 277-278.
     """
     fixed_leader5_format = (
         ('id', '<H', 0),
@@ -86,32 +88,50 @@ def parse_fixed_leader5(pd0_bytes, offset, data):
 
 
 def parse_velocity5(pd0_bytes, offset, data, fbad=-32768):
-    velocity_format = (
-        ('id', '<H', 0),
-    )
+    velocity_format = (('id', '<H', 0),)
 
-    velocity_data = unpack_bytes(pd0_bytes, velocity_format, offset)
+    velocity_data5 = unpack_bytes(pd0_bytes, velocity_format,
+                                  offset)
     offset += 2  # Move past id field
-    vel = parse_per_cell_beam5(pd0_bytes, offset,
-                               data['fixed_leader_beam5']['number_of_cells'],
-                               '<h')
+    ncells = data['fixed_leader_beam5']['number_of_cells']
+    vel = parse_per_cell_beam5(pd0_bytes, offset, ncells, '<h')
     vel = np.array(vel)
     vel = np.ma.masked_where(vel==fbad, vel)
-    velocity_data['data'] = vel
+    velocity_data5['data'] = vel
 
-    return velocity_data
-
-
-def parse_correlation5():
-    raise NotImplementedError()
+    return velocity_data5
 
 
-def parse_amplitude5():
-    raise NotImplementedError()
+def parse_correlation5(pd0_bytes, offset, data):
+    correlation_format = (('id', '<H', 0),)
+
+    correlation_data5 = unpack_bytes(pd0_bytes, correlation_format,
+                                     offset)
+    offset += 2
+    ncells = data['fixed_leader_janus']['number_of_cells']
+    corr = parse_per_cell_beam5(pd0_bytes, offset, ncells, 'B')
+    correlation_data5['data'] = np.array(corr)
+
+    return correlation_data5
+
+
+def parse_echo_intensity_beam5(pd0_bytes, offset, data):
+    echo_intensity_format = (('id', '<H', 0),)
+
+    echo_intensity_data5 = unpack_bytes(pd0_bytes,
+                                        echo_intensity_format,
+                                        offset)
+    offset += 2
+    ncells = data['fixed_leader_janus']['number_of_cells']
+    echo = parse_per_cell_beam5(pd0_bytes, offset, ncells, 'B')
+    echo_intensity_data5['data'] = np.array(echo)
+
+    return echo_intensity_data5
 
 
 def parse_percent_good5():
     raise NotImplementedError()
+
 
 def parse_eventlog(pd0_bytes, offset, data):
     raise NotImplementedError()
@@ -279,16 +299,13 @@ def parse_per_cell_beam5(pd0_bytes, offset, number_of_cells, struct_format,
     data = []
     for cell in xrange(0, number_of_cells):
         cell_start = offset + cell*data_size
-        allcells5_data = []
-
         data_bytes = buffer(pd0_bytes, cell_start, data_size)
         cell_data = (struct.unpack(struct_format,
                                    data_bytes)[0])
         if debug:
             print 'Bytes: %s, Data: %s' % (data_bytes, cell_data)
-        allcells5_data.append(cell_data)
 
-        data.append(allcells5_data)
+        data.append(cell_data)
 
     return data
 
@@ -313,11 +330,10 @@ def parse_velocity(pd0_bytes, offset, data, fbad=-32768):
 
 
 def parse_correlation(pd0_bytes, offset, data):
-    correlation_format = (
-        ('id', '<H', 0),
-    )
+    correlation_format = (('id', '<H', 0),)
 
-    correlation_data = unpack_bytes(pd0_bytes, correlation_format, offset)
+    correlation_data = unpack_bytes(pd0_bytes, correlation_format,
+                                    offset)
     offset += 2
     corr = parse_per_cell_per_beam(
                 pd0_bytes, offset,
@@ -334,7 +350,8 @@ def parse_echo_intensity(pd0_bytes, offset, data):
     )
 
     echo_intensity_data = unpack_bytes(pd0_bytes,
-                                       echo_intensity_format, offset)
+                                       echo_intensity_format,
+                                       offset)
     offset += 2
     echo = parse_per_cell_per_beam(
         pd0_bytes,
@@ -353,7 +370,8 @@ def parse_percent_good(pd0_bytes, offset, data):
         ('id', '<H', 0),
     )
 
-    percent_good_data = unpack_bytes(pd0_bytes, percent_good_format, offset)
+    percent_good_data = unpack_bytes(pd0_bytes, percent_good_format,
+                                     offset)
     offset += 2
     pgood = parse_per_cell_per_beam(
         pd0_bytes,
@@ -402,7 +420,6 @@ class ReadChecksumError(Exception):
     Raised when the calculation of an ensemble fails, so cannot compare
     the calculated and read checksums.
     """
-    system("sleep 1")
     pass
 
 
@@ -463,12 +480,12 @@ output_data_parsers = {
     #--- Beam 5 data.
     0x0f01: ('fixed_leader_beam5', parse_fixed_leader5),
     0x0a00: ('velocity_beam5', parse_velocity5),
-    # 0x: ('correlation_beam5', parse_correlation5),
-    # 0x: ('amplitude_beam5', parse_amplitude5),
-    # 0x: ('percent_good_beam5', parse_percent_good5),
+    0x0b00: ('correlation_beam5', parse_correlation5),
+    0x0c00: ('echo_intensity_beam5', parse_echo_intensity_beam5),
+    # 0x000d: ('percent_good_beam5', parse_percent_good5),
     # misc.
     # 0x3200: ('instrument_transformation_matrix', parse_transfmatrix), #TODO
-    0x0006: ('bottom_track', parse_bottom_track),
+    # 0x0006: ('bottom_track', parse_bottom_track),
     # 0x000b: ('wave_parameters', parse_waves), #TODO
     # 0x000c: ('wave_parameters2', parse_sea_swell), #TODO
     # 0x7004: ('event_log', parse_eventlog), #TODO
@@ -483,6 +500,7 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
     Returns a dictionary of values parsed out into Python types.
     """
     data = {}
+    assert pd0_bytes[:2]==b'\x7f\x7f', "Bad header id."
 
     # Read in header
     data['header'] = parse_fixed_header(pd0_bytes)
@@ -493,12 +511,17 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
     except KeyError:
         raise ReadHeaderError("Could not read number of bytes in ensemble.")
 
+    # print(nbytes_in_ens)
+    # if nbytes_in_ens>1126:
+    #     embed()
     validate_checksum(pd0_bytes, nbytes_in_ens)
 
-    data['header']['address_offsets'] = (
-        parse_address_offsets(pd0_bytes,
-                              data['header']['number_of_data_types'])
-    )
+    num_datatypes = data['header']['number_of_data_types']
+    # if num_datatypes>14:
+    #     print(num_datatypes)
+    #     print(pd0_bytes)
+    data['header']['address_offsets'] = (parse_address_offsets(pd0_bytes,
+                                                               num_datatypes))
 
     for offset in data['header']['address_offsets']:
         try:
@@ -509,9 +532,7 @@ def parse_sentinelVpd0_bytearray(pd0_bytes):
         if header_id in output_data_parsers:
             key = output_data_parsers[header_id][0]
             parser = output_data_parsers[header_id][1]
-            data[key] = (
-                parser(pd0_bytes, offset, data)
-            )
+            data[key] = (parser(pd0_bytes, offset, data))
         else:
             pass
             # print 'No parser found for header at %s' % (hex(header_id),)
@@ -537,15 +558,22 @@ def get_pd0metadata(D):
     d_system_configuration_MSB = {'0100xxxx':'4-beam Janus',
                                   '0101xxxx':'5-beam Janus'}
 
-    # d_coord_trans = {'':'',
-    #                  '':'',
-    #                  '':'',
-    #                  'xxxxxxx1':'bin mapping was used'}
+    d_sensor_source = {'x1xxxxxx':'speed of sound calculated from depth, salinity, temperature',
+                       'xx1xxxxx':'uses depth sensor',
+                       'xxx1xxxx':'uses xducer heading sensor'}
+    d_coord_trans = {'xxx00xxx':'beam coordinates (no coordinate transformation)',
+                     'xxx01xxx':'instrument coordinates (b1->b2, b4->b3, towards instrument, error velocity)',
+                     'xxx10xxx':'ship coordinates (port->starboard, aft->forward, away from instrument, error velocity)',
+                     'xxx11xxx':'earth coordinates (west->east, vel2 = south->north, upwards, error velocity)',
+                     'xxxxx1xx':'pitch and roll used in ship or Earth transformation',
+                     'xxxxxx1x':'3-beam solution used if one beam is below the correlation threshold set by the WC command',
+                     'xxxxxxx1':'bin mapping was applied'}
     metadata_maps = {
         ('system_configuration_LSB'):d_system_configuration_LSB,
         ('system_configuration_MSB'):d_system_configuration_MSB,
-        # ('coordinate_transformation_descriptors'):d_coord_trans,
-    }
+        ('coordinate_transformation_process'):d_coord_trans,
+        ('sensor_source'):d_sensor_source
+        }
 
     # Read metadata from fixed leader.
     dFL = D['fixed_leader_janus']
@@ -561,7 +589,8 @@ def get_pd0metadata(D):
                     word = dmap[bitstr]
                     dFL.update({k:word})
                     allmeta.append(word)
-    D.update({'fixed_leader_janus':dFL, 'descriptors':allmeta})
+    D.update({'fixed_leader_janus':dFL})
+    # embed()
 
     return D
 
