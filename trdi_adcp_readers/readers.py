@@ -1,4 +1,5 @@
 import numpy as np
+import dask.array as da
 from pandas import Timedelta
 from xarray import IndexVariable, DataArray, Dataset
 from trdi_adcp_readers.pd0.pd0_parser_sentinelV import (ChecksumError,
@@ -10,7 +11,7 @@ from trdi_adcp_readers.pd15.pd0_converters import (
 )
 from trdi_adcp_readers.pd0.pd0_parser import parse_pd0_bytearray
 from trdi_adcp_readers.pd0.pd0_parser_sentinelV import parse_sentinelVpd0_bytearray
-# from IPython import embed
+from IPython import embed
 
 
 def read_PD15_file(path, header_lines=0, return_pd0=False):
@@ -201,7 +202,8 @@ def ensembles2dataset(ensdict, dsattrs={}, verbose=False, print_every=1000):
 
 
 def read_PD0_file(path, header_lines=0, return_pd0=False, all_ensembles=True,
-                  format='sentinel', debug=False, verbose=True):
+                  format='sentinel', use_dask=True, chunks=1e5,
+                  debug=False, verbose=True):
     """Read a TRDI Workhorse or Sentinel V *.pd0 file."""
     pd0_bytes = bytearray()
     with open(path, 'rb') as f:
@@ -210,7 +212,7 @@ def read_PD0_file(path, header_lines=0, return_pd0=False, all_ensembles=True,
 
     if all_ensembles:
         pd0reader = read_PD0_bytes_ensembles
-        kwread = dict(verbose=verbose)
+        kwread = dict(verbose=verbose, use_dask=use_dask, chunks=chunks)
     else:
         pd0reader = read_PD0_bytes
         kwread = dict()
@@ -218,9 +220,9 @@ def read_PD0_file(path, header_lines=0, return_pd0=False, all_ensembles=True,
     ret = pd0reader(pd0_bytes, return_pd0=return_pd0, format=format, **kwread)
 
     if return_pd0:
-        data, fixed_attrs, BAD_ENS, fbad_ens, errortype_count, pd0_bytes = ret
+        data, t, fixed_attrs, BAD_ENS, fbad_ens, errortype_count, pd0_bytes = ret
     else:
-        data, fixed_attrs, BAD_ENS, fbad_ens, errortype_count = ret
+        data, t, fixed_attrs, BAD_ENS, fbad_ens, errortype_count = ret
 
     if verbose:
         nens = len(data)
@@ -233,11 +235,6 @@ def read_PD0_file(path, header_lines=0, return_pd0=False, all_ensembles=True,
         print("*Bad checksums:  %d"%errortype_count['bad_checksum'])
         print("*Could not read ensemble's checksum:  %d"%errortype_count['read_checksum'])
         print("*Could not read ensemble's header:  %d"%errortype_count['read_header'])
-
-    # Get timestamps for all ensembles.
-    # Note that these timestamps indicate the Janus' (i.e., beams 1-4) pings,
-    # which will not necessarily be the same as the vertical beam's timestamp.
-    t = np.array([ens['timestamp'] for ens in data if ens is not None])
 
     if debug:
         if return_pd0:
@@ -254,13 +251,14 @@ def read_PD0_file(path, header_lines=0, return_pd0=False, all_ensembles=True,
 
 
 def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
-                             format='sentinel',
+                             format='sentinel', use_dask=True, chunks=1e4,
                              verbose=True, print_every=1000):
     """
     Finds the hex positions in the bytearray that identify the header of each
     ensemble. Then read each ensemble into a dictionary and accumulates them
     in a list.
     """
+    chunks = int(chunks)
     if format=='workhorse':
         parsepd0 = parse_pd0_bytearray
     elif format=='sentinel':
@@ -269,20 +267,45 @@ def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
         print('Unknown *.pd0 format')
 
     # Split segments of the byte array per ensemble.
-    DATA = []
     ensbytes = PD0_BYTES.split(headerid)
     ensbytes = [headerid + ens for ens in ensbytes] # Prepend header id back.
     ensbytes = ensbytes[1:] # First entry is empty, cap it off.
-    cont=0
+    nens = len(ensbytes)
+    nensm = nens - 1
     fbad_ens = []
     BAD_ENS = []
+    # embed()
+
+    # Get timestamps for all ensembles.
+    # Note that these timestamps indicate the Janus' (i.e., beams 1-4) pings,
+    # which will not necessarily be the same as the vertical beam's timestamp.
+    t = np.empty(nens, dtype=object)
+
+    if use_dask:
+        DATA = da.empty(nens, chunks=chunks)
+        ntotalchunks = nens//chunks
+        rem_ens = nens%chunks
+        has_tail=rem_ens>0
+        if has_tail: ntotalchunks+=1 # Last chunk takes remaining ensembles.
+        DATAbuffskel = np.empty(chunks, dtype=object)
+        DATAbuff = DATAbuffskel.copy()
+        daNaN = da.array(np.array(np.nan, ndmin=1))
+        cont_inchnk=0
+    else:
+        DATA = np.empty(nens, dtype=object)
+
     nChecksumError, nReadChecksumError, nReadHeaderError = 0, 0, 0
+    cont=0
+    cont_inchnk=0
     for ensb in ensbytes:
         try:
             dd = parsepd0(ensb)
+            # embed()
+            t[cont] = dd['timestamp']
         except (ChecksumError, ReadChecksumError, ReadHeaderError) as E:
+            t[cont] = np.nan
             fbad_ens.append(cont) # Store index of bad ensemble.
-            BAD_ENS.append(ens)   # Store bytes of the bad ensemble.
+            # BAD_ENS.append(ens)   # Store bytes of the bad ensemble.
 
             # Which type of error was it?
             if isinstance(E, ChecksumError):
@@ -292,11 +315,35 @@ def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
             elif isinstance(E, ReadHeaderError):
                 nReadHeaderError += 1
 
-            DATA.append(None)
+            if use_dask:
+                if cont_inchnk==chunks:
+                    DATA = da.concatenate((DATA, daNaN.copy()))
+                    DATAbuff = DATAbuffskel.copy()
+                    cont_inchnk=0
+                else:
+                    DATAbuff[cont_inchnk] = np.nan
+                    cont_inchnk+=1
+                    if has_tail and cont==nensm: # Save the last chunk.
+                        DATA = da.concatenate((DATA, daNaN.copy()))
+            else:
+                DATA[cont] = np.nan
+
             cont+=1
             continue
 
-        DATA.append(dd)
+        if use_dask:
+            if cont_inchnk==chunks:
+                DATA = da.concatenate((DATA, da.array(DATAbuff)))
+                DATAbuff = DATAbuffskel.copy()
+                cont_inchnk=0
+            else:
+                DATAbuff[cont_inchnk] = dd
+                cont_inchnk+=1
+                if has_tail and cont==nensm: # Save the last chunk.
+                    DATA = da.concatenate((DATA, da.array(DATAbuff)))
+        else:
+            DATA[cont] = dd
+
         cont+=1
         if verbose and not cont%print_every: print("Ensemble %d"%cont)
 
@@ -309,9 +356,9 @@ def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
     fixed_attrs = []
 
     if return_pd0:
-        ret = (DATA, fixed_attrs, BAD_ENS, fbad_ens, errortype_count, PD0_BYTES)
+        ret = (DATA, t, fixed_attrs, BAD_ENS, fbad_ens, errortype_count, PD0_BYTES)
     else:
-        ret = (DATA, fixed_attrs, BAD_ENS, fbad_ens, errortype_count)
+        ret = (DATA, t, fixed_attrs, BAD_ENS, fbad_ens, errortype_count)
 
     return ret
 
