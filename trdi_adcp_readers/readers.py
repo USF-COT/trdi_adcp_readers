@@ -211,8 +211,8 @@ def ensembles2dataset_dask(ensdict, ncfpath, dsattrs={}, chunks=10,
              'm/s, positive toward xducer face',
              'no units', 'no units', 'no units', 'no units',
              'no units',
-             'decibels', 'decibels', 'decibels', 'decibels',
-             'decibels',
+             'dB', 'dB', 'dB', 'dB',
+             'dB',
              'degrees', 'degrees', 'degrees')
     names = ('b1', 'b2', 'b3', 'b4', 'b5',
              'cor1', 'cor2', 'cor3', 'cor4', 'cor5',
@@ -279,7 +279,7 @@ def ensembles2dataset(ensdict, dsattrs={}, verbose=False, print_every=1000):
     Convert a dictionary of ensembles into an xarray Dataset object.
     """
     mms2ms = 1e-3
-    fbadens = np.array(ensdict)==None
+    fbadens = np.array([not isinstance(ens, dict) for ens in ensdict])
     nt = len(ensdict) - np.sum(fbadens)
     n=0
     ensdict0 = None
@@ -401,8 +401,8 @@ def ensembles2dataset(ensdict, dsattrs={}, verbose=False, print_every=1000):
              'm/s, positive toward xducer face',
              'no units', 'no units', 'no units', 'no units',
              'no units',
-             'decibels', 'decibels', 'decibels', 'decibels',
-             'decibels',
+             'dB', 'dB', 'dB', 'dB',
+             'dB',
              'degrees', 'degrees', 'degrees')
     names = ('b1', 'b2', 'b3', 'b4', 'b5',
              'cor1', 'cor2', 'cor3', 'cor4', 'cor5',
@@ -420,6 +420,10 @@ def ensembles2dataset(ensdict, dsattrs={}, verbose=False, print_every=1000):
         else:
             coordsn = coords
             dimsn = dims
+
+        if 'int' in name:
+            arr *= 0.45 # Scale factor for echo intensity, see Sentinel V manual
+                        # Sentinel V manual p. 264.
 
         da = DataArray(arr, coords=coordsn, dims=dimsn, attrs=dict(units=unit, long_name=long_name))
         data_vars.update({name:da})
