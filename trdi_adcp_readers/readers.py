@@ -1,7 +1,7 @@
 import numpy as np
 import dask.array as darr
 from dask import compute, delayed
-from dask.bag import from_delayed
+from dask.bag import from_delayed, from_sequence
 from pandas import Timedelta
 from xarray import Variable, IndexVariable, DataArray, Dataset
 from trdi_adcp_readers.pd0.pd0_parser_sentinelV import (ChecksumError,
@@ -57,18 +57,30 @@ def _alloc_timestamp_parts(part): # Each partition is an array of dicts.
 
 @delayed
 def _addtarr(t, dt):
-    return np.array([tn + dt for tn in t])
+    return darr.array([tn + dt for tn in t])
 
 
-def _alloc_1dvar(ensblk, group='variable_leader_janus', varname=''):
-    arrs = []
-    for ensarr in ensblk:
-        if type(ensarr)==dict:
-            arrs.append(ensarr[group][varname])
-        else:
-            continue
+def _alloc_hpr(ensblk, group, varname):
+    phisc = 0.01 # Scale heading, pitch and roll by 0.01. Sentinel V manual, p. 259.
+    return darr.array([ensarr[group][varname]*phisc for ensarr in ensblk
+                       if type(ensarr)==dict])
 
-    return darr.array(arrs)
+
+def _alloc_beam5(ensblk, group):
+    return np.array([ensarr[group]['data'] for ensarr in ensblk
+                       if type(ensarr)==dict])
+
+
+# def _alloc_beam5vel(ensblk):
+#     arrs = darr.array([])
+#     for ensarr in ensblk:
+#         if type(ensarr)==dict:
+#             arr = darr.from_array(np.array(ensarr['velocity_beam5']['data']), chunks=1)
+#             arrs = darr.concatenate((arrs, arr), axis=1)
+#         else:
+#             continue
+
+    return arrs
 
 
 # def alloc_2dvars(ensarr):
@@ -92,6 +104,11 @@ def _alloc_1dvar(ensblk, group='variable_leader_janus', varname=''):
 #         # int5[:, n] = ensarr['echo_intensity_beam5']['data'].squeeze()
 
 
+def _bag2DataArray(bg, chunks, **kwargs):
+    return DataArray(darr.from_array(np.array(wrk.compute()), chunks=chunks)
+                     **kwargs)
+
+
 def ensembles2dataset_dask(ensdict, ncfpath, dsattrs={}, chunks=10,
                            verbose=True, print_every=1000):
     """
@@ -100,18 +117,18 @@ def ensembles2dataset_dask(ensdict, ncfpath, dsattrs={}, chunks=10,
     """
     mms2ms = 1e-3
     n=0
-    ensdict_aux = ensdict[0].compute()
     # fbadens = np.array(ensdict_aux)==None
     # nt = len(ensdict) - np.sum(fbadens)
+    # embed()
 
     ensdict0 = None
     while ensdict0 is None:
-        ensdict0 = ensdict_aux[n]
+        ensdict0 = ensdict[n].compute()
         n+=1
     nz = ensdict0['fixed_leader_janus']['number_of_cells']
 
-    fixj = ensdict0['fixed_leader_janus']
-    fix5 = ensdict0['fixed_leader_beam5']
+    fixj = ensdict0['fixed_leader_janus'].compute()
+    fix5 = ensdict0['fixed_leader_beam5'].compute()
 
     # Add ping offset to get beam 5's timestamps.
     dt5 = fix5['ping_offset_time'] # In milliseconds.
@@ -122,8 +139,6 @@ def ensembles2dataset_dask(ensdict, ncfpath, dsattrs={}, chunks=10,
     th = th*np.pi/180.
     Cth = np.cos(th)
 
-    # Scale heading, pitch and roll by 0.01. Sentinel V manual, p. 259.
-    phisc = 0.01
     # Construct along-beam/vertical axes.
     cm2m = 1e-2
     r1janus = fixj['bin_1_distance']*cm2m
@@ -144,9 +159,9 @@ def ensembles2dataset_dask(ensdict, ncfpath, dsattrs={}, chunks=10,
 
     rb = IndexVariable('z', rb, attrs={'units':'meters', 'long_name':"along-beam distance from the xducer's face to the center of the bins, for beams 1-4 (Janus)"})
     zab = IndexVariable('z', zab, attrs={'units':'meters', 'long_name':"vertical distance from the instrument's head to the center of the bins, for beams 1-4 (Janus)"})
-    zab5 = IndexVariable('z', zab5, attrs={'units':'meters', 'long_name':"vertical distance from xducer face to the center of the bins, for beam 5 (vertical)"})
+    zab5 = IndexVariable('z5', zab5, attrs={'units':'meters', 'long_name':"vertical distance from xducer face to the center of the bins, for beam 5 (vertical)"})
 
-    ensdict = from_delayed(ensdict)
+    ensdict = from_sequence(ensdict)
     tjanus = ensdict.map_partitions(_alloc_timestamp_parts)
     t5 = _addtarr(tjanus, dt5)
 
@@ -155,44 +170,82 @@ def ensembles2dataset_dask(ensdict, ncfpath, dsattrs={}, chunks=10,
     time5 = IndexVariable('time5', t5.compute(), attrs={'long_name':'timestamps for beam 5 (vertical)'})
     if verbose: print("Done unpacking timestamps.")
 
-    coords0 = [('time', time)]
-    coords = [('z', zab), ('time', time)]
-    coords5 = [('z5', zab5), ('time5', time5)]
+    coords0 = dict(time=time)
+    coords = dict(z=zab, time=time, rb=rb)
+    coords5 = dict(z5=zab5, time5=time5)
     dims = ['z', 'time']
+    dims5 = ['z5', 'time5']
     dims0 = ['time']
-    coordsdict = dict(time=('time', time))
 
-    # Load 1d variables into memory to
-    # be able to put them in a DataArray.
-    # Heading, pitch and roll first.
+    coordsdict = coords0
+    if verbose: print("Allocating heading, pitch, roll.")
+    kwda = dict(coords=coordsdict, dims=dims0, attrs=dict(units=unit, long_name=lname))
+    svars = ['heading', 'pitch', 'roll']
+    long_names = svars
+    units = ['degrees']*3
+    grp = 'variable_leader_janus'
     vars1d = dict()
-    if verbose: print("Saving 1D variables.")
-    for varname in ['heading', 'pitch', 'roll']:
-        aux = ensdict.map_partitions(_alloc_1dvar, group='variable_leader_janus', varname=varname)
-        vars1d.update({varname:DataArray(np.array(aux.compute())*phisc, coords=coords0, dims=dims0, attrs=dict(units='degrees'))})
+    for vname,lname,unit in zip(svars,long_names,units):
+        if verbose: print(vname)
+        wrk = ensdict.map_partitions(_alloc_hpr, grp, vname)
+        # wrk = darr.from_array(np.array(wrk.compute()), chunks=chunks)
+        wrk2 = delayed(_bag2DataArray)(wrk, chunks)(**kwda)
+        vars1d.update({vname:wrk2})
+    del(wrk, wrk2)
 
-    # Open an xarray.Dataset in delayed mode and
-    # save 1D variables in a single compute cycle.
-    if verbose: print("Opening netCDF file: %s"%ncfpath)
-    ds1d = Dataset(data_vars=vars1d, coords=coordsdict)
-    ds1d = ds1d.to_netcdf(ncfpath, compute=False, mode='w')
-    ds1d.compute()
-    if verbose: print("Done saving 1D variables.")
+    ds2hpr = Dataset(data_vars=vars1d, coords=coordsdict)
+    ds2hpr = ds2hpr.to_netcdf(ncfpath, compute=False, mode='w')
+    if verbose: print("Saving heading, pitch, roll.")
+    ds2hpr.compute()
+    if verbose: print("Done saving heading, pitch, roll.")
+    del(ds2hpr)
+
+    coordsdict = coords5
+    # Load beam 5 variables into memory to
+    # be able to put them in a chunked DataArray.
+    if verbose: print("Allocating beam 5 variables.")
+    grps = ['velocity_beam5', 'correlation_beam5', 'echo_intensity_beam5']
+    long_names = ['Beam 5 velocity', 'Beam 5 correlation', 'Beam 5 echo amplitude']
+    units = ['mm/s, positive toward xducer face', 'unitless', 'dB']
+    vars5 = dict()
+    for grp,lname,unit in zip(grps,long_names,units):
+        if verbose: print(grp)
+        wrk = ensdict.map_partitions(_alloc_beam5, grp)
+        wrk = darr.from_array(np.array(wrk.compute()).T, chunks=(1, chunks))
+        wrk = DataArray(wrk, coords=coordsdict, dims=dims5, attrs=dict(units=unit, long_name=lname))
+        vars5.update({grp:wrk})
+    del(wrk)
+
+    ds5 = Dataset(data_vars=vars5, coords=coordsdict)
+    ds5 = ds5.to_netcdf(ncfpath, compute=False, mode='a')
+    if verbose: print("Saving beam 5 variables.")
+    ds5.compute()
+    if verbose: print("Done saving beam 5 variables.")
+    del(ds5)
     embed()
 
-    # Load 2d variables into memory to
-    # be able to put them in a DataArray.
-    # coordsdict = dict(z=('z', zab), time=('time', time))
+    coordsdict = coords
+    # Load beams 1-4 variables into memory to
+    # be able to put them in a chunked DataArray.
+    if verbose: print("Allocating Janus variables.")
+    grps = ['velocity_janus', 'correlation_janus', 'echo_intensity_janus']
+    long_names = ['Janus velocity', 'Janus correlation', 'Janus echo amplitude']
+    units = ['mm/s, positive toward xducer face', 'unitless', 'dB']
+    vars5 = dict()
+    for grp,lname,unit in zip(grps,long_names,units):
+        if verbose: print(grp)
+        wrk = ensdict.map_partitions(_alloc_janus, grp)
+        wrk = darr.from_array(np.array(wrk.compute()).T, chunks=(1, chunks))
+        wrk = DataArray(wrk, coords=coordsdict, dims=dims5, attrs=dict(units=unit, long_name=lname))
+        vars5.update({grp:wrk})
+    del(wrk)
 
-
-    # ds2d = Dataset(data_vars=vars2d, coords=coordsdict)
-    # ds2d = ds2d.to_netcdf(ncfpath, compute=False, mode='a')
-    # ds2d.compute()
-
-
-
-
-
+    dsj = Dataset(data_vars=varsj, coords=coordsdict)
+    dsj = dsj.to_netcdf(ncfpath, compute=False, mode='a')
+    if verbose: print("Saving Janus variables.")
+    dsj.compute()
+    if verbose: print("Done saving Janus variables.")
+    del(dsj)
 
     long_names = ('Beam 1 velocity', 'Beam 2 velocity',
              'Beam 3 velocity', 'Beam 4 velocity',
@@ -235,16 +288,6 @@ def ensembles2dataset_dask(ensdict, ncfpath, dsattrs={}, chunks=10,
 
     # ensdict = np.array(ensdict)[~fbadens]
     # ensdict = ensdict.tolist()
-
-    # Convert velocities to m/s.
-    # b1, b2, b3, b4, b5 = b1*mms2ms, b2*mms2ms, b3*mms2ms, b4*mms2ms, b5*mms2ms
-
-    # Scale heading, pitch and roll. Sentinel V manual, p. 259.
-
-    heading *= phisc
-    pitch *= phisc
-    roll *= phisc
-
     arrs = (b1, b2, b3, b4, b5,
             cor1, cor2, cor3, cor4, cor5,
             int1, int2, int3, int4, int5,
@@ -266,7 +309,6 @@ def ensembles2dataset_dask(ensdict, ncfpath, dsattrs={}, chunks=10,
         da = DataArray(arr, coords=coordsn, dims=dimsn, attrs=dict(units=unit, long_name=long_name))
         data_vars.update({name:da})
 
-    allcoords = {'rb':rb} # Along-beam distance for slanted beams.
     allcoords.update(coords)
     allcoords.update(coords5)
     ds = Dataset(data_vars=data_vars, coords=allcoords, attrs=dsattrs)
@@ -282,8 +324,8 @@ def ensembles2dataset(ensdict, dsattrs={}, verbose=False, print_every=1000):
     fbadens = np.array([not isinstance(ens, dict) for ens in ensdict])
     nt = len(ensdict) - np.sum(fbadens)
     n=0
-    ensdict0 = None
-    while ensdict0 is None:
+    ensdict0 = np.nan
+    while not isinstance(ensdict0, dict):
         ensdict0 = ensdict[n]
         n+=1
     nz = ensdict0['fixed_leader_janus']['number_of_cells']
@@ -437,8 +479,8 @@ def ensembles2dataset(ensdict, dsattrs={}, verbose=False, print_every=1000):
 
 
 def read_PD0_file(path, header_lines=0, return_pd0=False, all_ensembles=True,
-                  format='sentinel', use_dask=True, chunks=1e5,
-                  debug=False, verbose=True):
+                  format='sentinel', use_dask=True, chunks=100,
+                  debug=False, verbose=True, print_every=1e3):
     """Read a TRDI Workhorse or Sentinel V *.pd0 file."""
     pd0_bytes = bytearray()
     with open(path, 'rb') as f:
@@ -447,7 +489,8 @@ def read_PD0_file(path, header_lines=0, return_pd0=False, all_ensembles=True,
 
     if all_ensembles:
         pd0reader = read_PD0_bytes_ensembles
-        kwread = dict(verbose=verbose, use_dask=use_dask, chunks=chunks)
+        kwread = dict(verbose=verbose, print_every=print_every,
+                      use_dask=use_dask, chunks=chunks)
     else:
         pd0reader = read_PD0_bytes
         kwread = dict()
@@ -517,15 +560,14 @@ def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
     t = np.empty(nens, dtype=object)
 
     if use_dask:
-        DATA = []
-        # DATA = darr.empty(nens, chunks=chunks)
+        DATA = darr.from_array(np.array([], dtype=object, ndmin=1), chunks=chunks)
         ntotalchunks = nens//chunks
         rem_ens = nens%chunks
         has_tail=rem_ens>0
         if has_tail: ntotalchunks+=1 # Last chunk takes remaining ensembles.
         DATAbuffskel = np.empty(chunks, dtype=object)
         DATAbuff = DATAbuffskel.copy()
-        daNaN = darr.array(np.array(np.nan, ndmin=1))
+        daNaN = darr.from_array(np.array(np.nan, ndmin=1), chunks=1)
         cont_inchnk=0
     else:
         DATA = np.empty(nens, dtype=object)
@@ -535,7 +577,10 @@ def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
     cont_inchnk=0
     for ensb in ensbytes:
         try:
-            dd = parsepd0(ensb)
+            if use_dask:
+                dd = delayed(parsepd0)(ensb)
+            else:
+                dd = parsepd0(ensb)
             # embed()
             t[cont] = dd['timestamp']
         except (ChecksumError, ReadChecksumError, ReadHeaderError) as E:
@@ -553,16 +598,14 @@ def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
 
             if use_dask:
                 if cont_inchnk==chunks:
-                    # DATA = darr.concatenate((DATA, daNaN.copy()))
-                    DATA.append(delayed(daNaN.copy()))
+                    DATA = darr.concatenate((DATA, daNaN.copy()))
                     DATAbuff = DATAbuffskel.copy()
                     cont_inchnk=0
                 else:
                     DATAbuff[cont_inchnk] = np.nan
                     cont_inchnk+=1
                     if has_tail and cont==nensm: # Save the last chunk.
-                        # DATA = darr.concatenate((DATA, daNaN.copy()))
-                        DATA.append(delayed(daNaN.copy()))
+                        DATA = darr.concatenate((DATA, daNaN.copy()))
             else:
                 DATA[cont] = np.nan
 
@@ -571,8 +614,7 @@ def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
 
         if use_dask:
             if cont_inchnk==chunks:
-                # DATA = darr.concatenate((DATA, darr.array(DATAbuff)))
-                DATA.append(delayed(DATAbuff))
+                DATA = darr.concatenate((DATA, darr.from_array(DATAbuff, chunks=chunks)))
                 DATAbuff = DATAbuffskel.copy()
                 cont_inchnk=0
                 # embed()
@@ -580,7 +622,7 @@ def read_PD0_bytes_ensembles(PD0_BYTES, return_pd0=False, headerid='\x7f\x7f',
                 DATAbuff[cont_inchnk] = dd
                 cont_inchnk+=1
                 if has_tail and cont==nensm: # Save the last chunk.
-                    DATA.append(delayed(DATAbuff))
+                    DATA = darr.concatenate((DATA, darr.from_array(DATAbuff, chunks=chunks)))
         else:
             DATA[cont] = dd
 
