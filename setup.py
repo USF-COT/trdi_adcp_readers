@@ -6,7 +6,6 @@ setup(
     py_modules=[
         'trdi_adcp_readers.readers',
         'trdi_adcp_readers.pd0.pd0_parser',
-        'trdi_adcp_readers.pd0.pd0_parser_sentinelV',
         'trdi_adcp_readers.pd15.pd0_converters'
     ],
     scripts=['scripts/convert_trdi.py'],
