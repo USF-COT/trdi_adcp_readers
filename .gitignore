@@ -36,3 +36,7 @@ nosetests.xml
 
 # VIM Swap Files
 *.swp
+
+.python-version
+
+.DS_Store

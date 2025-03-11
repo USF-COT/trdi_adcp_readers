@@ -8,14 +8,13 @@ def unpack_bytes(pd0_bytes, data_format_tuples, offset=0):
         try:
             struct_offset = offset+fmt[2]
             size = struct.calcsize(fmt[1])
-            data_bytes = buffer(pd0_bytes, struct_offset, size)
+            data_bytes = memoryview(pd0_bytes)[struct_offset:struct_offset + size]
             data[fmt[0]] = (
                 struct.unpack(fmt[1], data_bytes)[0]
             )
-        except:
-            print('Error parsing %s with the arguments '
-                  '%s, offset:%d size:%d' % (fmt[0], fmt[1],
-                                             struct_offset, size))
+        except Exception as e:
+            print(f'Error parsing {fmt[0]} with the arguments '
+                  f'{fmt[1]}, offset:{struct_offset} size:{size}')
 
     return data
 
@@ -34,10 +33,10 @@ def parse_fixed_header(pd0_bytes):
 
 def parse_address_offsets(pd0_bytes, num_datatypes, offset=6):
     address_data = []
-    for bytes_start in xrange(offset, offset+(num_datatypes * 2), 2):
+    for bytes_start in range(offset, offset+(num_datatypes * 2), 2):
         data = (
             struct.unpack_from('<H',
-                               buffer(pd0_bytes, bytes_start, 2))[0]
+                             memoryview(pd0_bytes)[bytes_start:bytes_start + 2])[0]
         )
         address_data.append(data)
 
@@ -151,8 +150,8 @@ def parse_variable_leader(pd0_bytes, offset, data):
 
 
 def parse_per_cell_per_beam(pd0_bytes, offset,
-                            number_of_cells, number_of_beams,
-                            struct_format, debug=False):
+                          number_of_cells, number_of_beams,
+                          struct_format, debug=False):
     """
     Parses fields that are stored in serial cells and beams
     structures.
@@ -163,18 +162,18 @@ def parse_per_cell_per_beam(pd0_bytes, offset,
 
     data_size = struct.calcsize(struct_format)
     data = []
-    for cell in xrange(0, number_of_cells):
+    for cell in range(0, number_of_cells):
         cell_start = offset + cell*number_of_beams*data_size
         cell_data = []
-        for field in xrange(0, number_of_beams):
+        for field in range(0, number_of_beams):
             field_start = cell_start + field*data_size
-            data_bytes = buffer(pd0_bytes, field_start, data_size)
+            data_bytes = memoryview(pd0_bytes)[field_start:field_start + data_size]
             field_data = (
                 struct.unpack(struct_format,
-                              data_bytes)[0]
+                            data_bytes)[0]
             )
             if debug:
-                print 'Bytes: %s, Data: %s' % (data_bytes, field_data)
+                print(f'Bytes: {data_bytes}, Data: {field_data}')
             cell_data.append(field_data)
         data.append(cell_data)
 
@@ -291,7 +290,7 @@ def parse_bottom_track(pd0_bytes, offset, data):
     raise NotImplementedError()
 
 
-def ChecksumError(Exception):
+class ChecksumError(Exception):
     """
     Raised when an invalid checksum is found
     """
@@ -300,12 +299,12 @@ def ChecksumError(Exception):
         self.given_checksum = given_checksum
 
     def __str__(self):
-        return 'Calculated %d, Given: %d'
+        return f'Calculated {self.calc_checksum}, Given: {self.given_checksum}'
 
 
 def validate_checksum(pd0_bytes, offset):
     calc_checksum = sum(pd0_bytes[:offset]) & 0xFFFF
-    given_checksum = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
+    given_checksum = struct.unpack('<H', memoryview(pd0_bytes)[offset:offset + 2])[0]
 
     if calc_checksum != given_checksum:
         raise ChecksumError(calc_checksum, given_checksum)
@@ -346,7 +345,7 @@ def parse_pd0_bytearray(pd0_bytes):
     )
 
     for offset in data['header']['address_offsets']:
-        header_id = struct.unpack('<H', buffer(pd0_bytes, offset, 2))[0]
+        header_id = struct.unpack('<H', memoryview(pd0_bytes)[offset:offset + 2])[0]
         if header_id in output_data_parsers:
             key = output_data_parsers[header_id][0]
             parser = output_data_parsers[header_id][1]
@@ -354,6 +353,6 @@ def parse_pd0_bytearray(pd0_bytes):
                 parser(pd0_bytes, offset, data)
             )
         else:
-            print 'No parser found for header %d' % (header_id,)
+            print(f'No parser found for header {header_id}')
 
     return data
