@@ -1,14 +1,15 @@
 import unittest
+import os
 from trdi_adcp_readers.readers import (
     read_PD0_file,
     read_PD15_file
 )
 import pprint
-from itertools import izip
 
 
 class TestPD0File(unittest.TestCase):
-    parsed_pd0 = read_PD0_file('./C12AN_90.PD0')
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    parsed_pd0 = read_PD0_file(os.path.join(test_dir, 'C12AN_90.PD0'))
 
 #    def test_print_data(self):
 #        pp = pprint.PrettyPrinter(indent=4)
@@ -67,11 +68,11 @@ class TestPD0File(unittest.TestCase):
             self.assertEqual(self.parsed_pd0['variable_leader'][k], v)
 
     def run_known_array_test(self, known_values, pd0_data):
-        known_data = izip(known_values[0], known_values[1],
-                          known_values[2], known_values[3])
+        known_data = zip(known_values[0], known_values[1],
+                        known_values[2], known_values[3])
 
-        for pd0_bin, known_bin in izip(pd0_data, known_data):
-            for pd0_beam, known_beam in izip(pd0_bin, known_bin):
+        for pd0_bin, known_bin in zip(pd0_data, known_data):
+            for pd0_beam, known_beam in zip(pd0_bin, known_bin):
                 self.assertEqual(pd0_beam, known_beam)
 
     def test_echo_intensity(self):
@@ -120,8 +121,9 @@ class TestPD0File(unittest.TestCase):
 
 
 class TestPD15(unittest.TestCase):
-    parsed_pd0 = read_PD15_file('./140B97C6',
-                                header_lines=2)
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    parsed_pd0 = read_PD15_file(os.path.join(test_dir, '140B97C6'),
+                               header_lines=2)
 
     def test_print_data(self):
         pp = pprint.PrettyPrinter(indent=4)

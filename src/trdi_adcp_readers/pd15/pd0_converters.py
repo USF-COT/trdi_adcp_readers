@@ -1,11 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 
 # Taken from http://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks-in-python
 def chunks(l, n):
     """ Yield successive n-sized chunks from l.
     """
-    for i in xrange(0, len(l), n):
+    for i in range(0, len(l), n):
         yield l[i:i+n]
 
 
@@ -15,7 +15,7 @@ def PD15_file_to_PD0(path, header_lines=0):
     """
     with open(path, 'rb') as f:
         if (header_lines > 0):
-            for i in xrange(0, header_lines):
+            for i in range(0, header_lines):
                 f.readline()
 
         data_line = f.readline()
@@ -28,7 +28,13 @@ def PD15_string_to_PD0(line):
     """
     Parses a single PD15 line and returns a PD0 byte array
     """
-    line_bytes = bytearray(line, encoding="ASCII")
+    if isinstance(line, str):
+        line_bytes = bytearray(line.encode('ASCII'))
+    elif isinstance(line, bytes):
+        line_bytes = bytearray(line)
+    else:
+        line_bytes = line
+        
     line_chunks = chunks(line_bytes, 4)
 
     pd0_out = bytearray(len(line_bytes))

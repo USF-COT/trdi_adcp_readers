@@ -1,4 +1,3 @@
-
 from trdi_adcp_readers.pd15.pd0_converters import (
     PD15_file_to_PD0,
     PD15_string_to_PD0
@@ -16,7 +15,9 @@ def read_PD15_file(path, header_lines=0, return_pd0=False):
 
 
 def read_PD15_hex(hex_string, return_pd0=False):
-    pd15_byte_string = hex_string.decode("hex")
+    if isinstance(hex_string, str):
+        hex_string = hex_string.encode('ascii')
+    pd15_byte_string = bytes.fromhex(hex_string.decode('ascii'))
     pd0_bytes = PD15_string_to_PD0(pd15_byte_string)
     data = parse_pd0_bytearray(pd0_bytes)
     if return_pd0:
@@ -37,7 +38,7 @@ def read_PD15_string(string, return_pd0=False):
 def read_PD0_file(path, header_lines=0, return_pd0=False):
     pd0_bytes = bytearray()
     with open(path, 'rb') as f:
-        for i in xrange(0, header_lines):
+        for i in range(0, header_lines):
             f.readline()
 
         pd0_bytes = bytearray(f.read())
