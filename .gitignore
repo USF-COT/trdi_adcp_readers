@@ -40,3 +40,6 @@ nosetests.xml
 .python-version
 
 .DS_Store
+
+.venv
+tests/output/*

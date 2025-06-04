@@ -11,14 +11,13 @@ Contains methods to convert from PD15 to PD0.  Once in PD0, the data can be pars
 
 ## Installation ##
 
-    git clone git://github.com/USF-COT/trdi_adcp_readers.git
-    sudo python setup.py install
+    pip install trdi-adcp-readers
 
 ## Test ##
 
 From the root directory run tests.py to test against a known PD0 and PD15 file
 
-    python tests.py
+    python tests/tests.py
 
 ## Example ##
 
@@ -39,3 +38,24 @@ From the root directory run tests.py to test against a known PD0 and PD15 file
     data = parse_pd0_bytearray(pd0)
 
 Note that this example uses the included file 140B97C6.  This file is a test GOES file transmitted by an in-shore [COMPS](http://comps.marine.usf.edu/) station.  This station is located in a shallow area.  Only data from the first few cells is valid.  Transmissions from this station include a GOES header and an empty line before the PD15 data.  The PD15 converter skips these first two lines using the argument header\_lines=2.
+
+### Convert ADCP Data to UHI Format ###
+
+The package includes a utility script for converting TRDI ADCP data (PD0 or PD15) to University of Hawaii's (UHI) format, which consists of three CSV files:
+
+    python -m trdi_adcp_readers.scripts.convert_trdi_uhi --format pd0 --headers 0 <input_file> <info_output> <velocity_output> <data_output>
+
+Example:
+
+    python -m trdi_adcp_readers.scripts.convert_trdi_uhi --format pd0 --headers 0 tests/data/1407E0CA.PD0 1407E0CA_info.txt 1407E0CA_velocity.txt 1407E0CA_data.txt
+
+Command options:
+
+* `--format pd0|pd15`: Specifies the input file format (pd0 or pd15). If not provided, the script will attempt to determine format from file extension.
+* `--headers N`: Number of header lines to skip before parsing data (default: 0).
+* `--mag-declination VALUE`: Magnetic declination in degrees (default: 0.0).
+
+Output files:
+* `info_output`: Contains header information about the ADCP deployment.
+* `velocity_output`: Contains water depth and velocity data for each bin.
+* `data_output`: Contains correlation and echo amplitude data for each bin.
