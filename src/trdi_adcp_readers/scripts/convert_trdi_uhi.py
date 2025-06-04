@@ -7,10 +7,8 @@ from trdi_adcp_readers.readers import (
 
 import argparse
 import math
-import numpy as np
 from os import path
 import sys
-from datetime import datetime
 
 ext_parser_map = {
     'pd0': read_PD0_file,
