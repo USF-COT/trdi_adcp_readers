@@ -13,6 +13,13 @@ Contains methods to convert from PD15 to PD0.  Once in PD0, the data can be pars
 
     pip install trdi-adcp-readers
 
+## Command-line Tools ##
+
+This package provides the following command-line tools after installation:
+
+- `convert_trdi`: Converts a binary PD15 or PD0 TRDI ADCP file to CSV files
+- `convert_trdi_uhi`: Converts a binary PD15 or PD0 TRDI ADCP file to University of Hawaii (UHI) format CSV files
+
 ## Test ##
 
 From the root directory run tests.py to test against a known PD0 and PD15 file
@@ -41,13 +48,17 @@ Note that this example uses the included file 140B97C6.  This file is a test GOE
 
 ### Convert ADCP Data to UHI Format ###
 
-The package includes a utility script for converting TRDI ADCP data (PD0 or PD15) to University of Hawaii's (UHI) format, which consists of three CSV files:
+The package includes a command-line utility for converting TRDI ADCP data (PD0 or PD15) to University of Hawaii's (UHI) format, which consists of three CSV files:
 
-    python -m trdi_adcp_readers.scripts.convert_trdi_uhi --format pd0 --headers 0 <input_file> <info_output> <velocity_output> <data_output>
+    convert_trdi_uhi --format pd0 --headers 0 <input_file> <info_output> <velocity_output> <data_output>
 
 Example:
 
-    python -m trdi_adcp_readers.scripts.convert_trdi_uhi --format pd0 --headers 0 tests/data/1407E0CA.PD0 1407E0CA_info.txt 1407E0CA_velocity.txt 1407E0CA_data.txt
+    convert_trdi_uhi --format pd0 --headers 0 tests/data/1407E0CA.PD0 1407E0CA_info.txt 1407E0CA_velocity.txt 1407E0CA_data.txt
+
+You can also run it as a module:
+
+    python -m trdi_adcp_readers.scripts.convert_trdi_uhi --format pd0 --headers 0 <input_file> <info_output> <velocity_output> <data_output>
 
 Command options:
 
