@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "trdi_adcp_readers"
-version = "25.6.3"
+version = "25.6.4"
 description = "A library capable of reading various TRDI ADCP data formats including PD15 and PD0 into python native types."
 readme = "README.md"
 authors = [
@@ -21,7 +21,7 @@ dependencies = []
 Homepage = "https://github.com/USF-COT/trdi_adcp_readers"
 
 [tool.hatch.build]
-packages = ["src/trdi_adcp_readers"]
+sources = ["src"]
 
 [dependency-groups]
 dev = [
